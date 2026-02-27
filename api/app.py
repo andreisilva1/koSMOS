@@ -1,18 +1,15 @@
 
 from io import BytesIO
 import json
-import os
 from pathlib import Path
 from typing import Optional
-import boto3
 from dotenv import load_dotenv
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi import FastAPI, Form, UploadFile
 from fastapi.responses import StreamingResponse
 
 from model_tests.clustering import test_clustering_algorithms
-from utils import convert_to_df
-from checks import check_colinearity
+from utils import convert_to_df, extract_numericals_categoricals_and_ordinals
 import zipfile
 
 load_dotenv()
@@ -66,13 +63,14 @@ async def test_models(file: UploadFile, dict_types: str = Form(), dict_values: s
         else:
             cluster_method = "k-means"
         
-        df_with_clusters, correlation_pairs = test_clustering_algorithms(cluster_method=cluster_method, df=df, dict_values=dict_values, n_groups=n_groups, numericals=numericals, categoricals=categoricals, ordinals=ordinals)
+        df_with_clusters, high_correlations, all_correlations = test_clustering_algorithms(cluster_method=cluster_method, df=df, dict_values=dict_values, n_groups=n_groups, numericals=numericals, categoricals=categoricals, ordinals=ordinals)
 
         # Put the final dataset and the correlation dataset in a zip
         output = BytesIO()
         with zipfile.ZipFile(output, "w") as z:
             z.writestr("dataset.csv", df_with_clusters)
-            z.writestr("correlation.csv", correlation_pairs)
+            z.writestr("high_correlations.csv", high_correlations)
+            z.writestr("all_correlations.csv", all_correlations)
             
         output.seek(0)
         
@@ -83,10 +81,4 @@ async def test_models(file: UploadFile, dict_types: str = Form(), dict_values: s
                 "Content-Disposition": "attachment; filename=export.zip"
             }
         )
-
-def extract_numericals_categoricals_and_ordinals(dict_types: dict):
-    numericals = [key for key in dict_types.keys() if dict_types.get(key) in ["range", "int", "float"]]
-    categoricals = [key for key in dict_types.keys() if dict_types.get(key) in ["enum", "str"]]
-    ordinals = [key for key in dict_types.keys() if dict_types.get(key) == "ordinal"]
-    return numericals, categoricals, ordinals
 

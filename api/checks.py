@@ -5,8 +5,9 @@ from pandas.api.types import is_string_dtype
 from statsmodels.stats.outliers_influence import variance_inflation_factor
 from sklearn.preprocessing import StandardScaler
 
-def check_colinearity(df: DataFrame, target: str):
-    X = df.drop(columns=target)
+def check_collinearity(df: DataFrame, target: str = None):
+    X = df.drop(columns=target) if target else df.copy()
+    
 
     # Made a OneHot Encoder in all the str columns in the df
     str_columns = [X[col] for col in X.columns if is_string_dtype(X[col])]
@@ -30,14 +31,14 @@ def check_colinearity(df: DataFrame, target: str):
         for j in range(i + 1, len(cols)):
             corr_pairs.append({"col_1": cols[i], "col_2": cols[j], "corr": corr.iloc[i, j]})
     
-    # 1 pair with more than 0.9 correlation or 10% or the pairs more than 0.85 correlation = strong colinearity, that makes sense... I think      
+    # 1 pair with more than 0.9 correlation or 10% or the pairs more than 0.85 correlation = strong collinearity, that makes sense... I think      
     corr_more_than_90 = []
     corr_more_than_85 = []
 
     corr_more_than_90 = len([x for x in corr_pairs if abs(x["corr"]) >= 0.9])
     corr_more_than_85 = len([x for x in corr_pairs if abs(x["corr"]) >= 0.85])
 
-    # Check colinearity by VIF    
+    # Check collinearity by VIF    
     # VIF Verification (Variance Inflation Factor) -> How much a variable is been explained by the others
     vif_data = pd.DataFrame()
     vif_data["feature"] = X.columns

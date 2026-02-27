@@ -2,7 +2,8 @@
 from io import BytesIO
 
 import pandas as pd
-
+from pandas import DataFrame
+from sklearn.decomposition import PCA
 
 def convert_to_df(content: BytesIO, file_extension: str, **kwargs):    
     if file_extension == ".csv":
@@ -40,3 +41,22 @@ def extract_correlation_pairs(df: pd.DataFrame):
         for j in range(i+1, len(cols)):
             corr_pairs.append({"x": cols[i], "y": cols[j], "correlation": corr.iloc[i, j]})
     return corr_pairs
+
+def extract_numericals_categoricals_and_ordinals(dict_types: dict):
+    numericals = [key for key in dict_types.keys() if dict_types.get(key) in ["range", "int", "float"]]
+    categoricals = [key for key in dict_types.keys() if dict_types.get(key) in ["enum", "str"]]
+    ordinals = [key for key in dict_types.keys() if dict_types.get(key) == "ordinal"]
+    return numericals, categoricals, ordinals
+
+def apply_pca(df: DataFrame, X_transformed, df_transformed: DataFrame): # df_transformed = df after the preprocessiing
+    base_pca = PCA()
+    base_pca.fit(X_transformed)
+    explained_variance = base_pca.explained_variance_ratio_.cumsum()
+    n_components = (explained_variance < 0.9).sum() + 1
+    model_pca = PCA(n_components=n_components)
+    X_pca = model_pca.fit_transform(X_transformed)
+    
+    corr_pairs = extract_correlation_pairs(df_transformed)               
+    df_corr = pd.DataFrame(corr_pairs)
+    df_high_corr = df_corr[abs(df_corr["correlation"]) >= 0.6]   
+    return df_corr, df_high_corr, n_components, X_pca
