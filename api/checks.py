@@ -24,18 +24,18 @@ def check_colinearity(df: DataFrame, target: str):
     # By Correlation Matriz
     corr = df.corr(numeric_only=True)
     print(df.corr())
-    pair_corr = []
+    corr_pairs = []
     cols = corr.columns
     for i in range(len(cols)):
         for j in range(i + 1, len(cols)):
-            pair_corr.append({"col_1": cols[i], "col_2": cols[j], "corr": corr.iloc[i, j]})
+            corr_pairs.append({"col_1": cols[i], "col_2": cols[j], "corr": corr.iloc[i, j]})
     
     # 1 pair with more than 0.9 correlation or 10% or the pairs more than 0.85 correlation = strong colinearity, that makes sense... I think      
     corr_more_than_90 = []
     corr_more_than_85 = []
 
-    corr_more_than_90 = len([x for x in pair_corr if abs(x["corr"]) >= 0.9])
-    corr_more_than_85 = len([x for x in pair_corr if abs(x["corr"]) >= 0.85])
+    corr_more_than_90 = len([x for x in corr_pairs if abs(x["corr"]) >= 0.9])
+    corr_more_than_85 = len([x for x in corr_pairs if abs(x["corr"]) >= 0.85])
 
     # Check colinearity by VIF    
     # VIF Verification (Variance Inflation Factor) -> How much a variable is been explained by the others
@@ -47,5 +47,5 @@ def check_colinearity(df: DataFrame, target: str):
     cond = np.linalg.cond(StandardScaler().fit_transform(X))
     
     # Return true if one correlation > 0.9, 2 correlations > 0.85, VIF average >= 5, any VIF >= 10 or cond > 100
-    return [bool(x) for x in [corr_more_than_90 >= 1, (corr_more_than_85 / len(pair_corr)) > 0.1, (sum(vif_data.VIF) / len(vif_data)) >= 5, len(vif_data[vif_data["VIF"] >= 10]) > 0, cond > 100]]
+    return [bool(x) for x in [corr_more_than_90 >= 1, (corr_more_than_85 / len(corr_pairs)) > 0.1, (sum(vif_data.VIF) / len(vif_data)) >= 5, len(vif_data[vif_data["VIF"] >= 10]) > 0, cond > 100]]
     

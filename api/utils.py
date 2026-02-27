@@ -30,3 +30,13 @@ def convert_to_df(content: BytesIO, file_extension: str, **kwargs):
         raise ValueError(f"Format not found: {file_extension}")
 
     return df
+
+def extract_correlation_pairs(df: pd.DataFrame):
+    corr_pairs = []
+    cols = df.columns
+    corr = df.corr()
+    corr_pairs = []
+    for i in range(len(cols)):
+        for j in range(i+1, len(cols)):
+            corr_pairs.append({"x": cols[i], "y": cols[j], "correlation": corr.iloc[i, j]})
+    return corr_pairs

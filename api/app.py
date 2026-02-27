@@ -8,19 +8,17 @@ import boto3
 from dotenv import load_dotenv
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi import FastAPI, Form, UploadFile
-from pandas import DataFrame
+from fastapi.responses import StreamingResponse
 
 from model_tests.clustering import test_clustering_algorithms
 from utils import convert_to_df
 from checks import check_colinearity
+import zipfile
 
 load_dotenv()
 
 app = FastAPI()
 app.add_middleware(CORSMiddleware, allow_origins=["*"])
-
-s3 = boto3.client("s3")
-BUCKET_NAME = os.getenv("BUCKET_NAME")
 
 @app.post("/analyze")
 async def analyze(file: UploadFile, separator: Optional[str] = Form(None), sheet_name: Optional[str] = Form(None)):
@@ -38,7 +36,7 @@ async def analyze(file: UploadFile, separator: Optional[str] = Form(None), sheet
             "column": column,
             "values": [v.item() if hasattr(v, "item") else v for v in df[column].unique()]
                       if (len(df[column].unique()) <= 3 and len(df) >= 1000)
-                      else [df[column].unique()[0].item()],
+                      else [str(df[column].unique()[0].item() if hasattr(df[column].unique()[0], "item") else df[column].unique()[0])],
                       "type": "categorical" if (len(df[column].unique()) <= 3 and len(df) >= 1000) else str(type(data[0][column]))
         }
         for column in df.columns
@@ -49,7 +47,7 @@ async def analyze(file: UploadFile, separator: Optional[str] = Form(None), sheet
     return list_columns_and_values
 
 @app.post("/test_model", include_in_schema=False)
-async def test_models(file: UploadFile, file_extension: str, dict_types: str, dict_values: str, ids_columns: list = None, target: str = None, n_groups: int = None, sheet_name: Optional[str] = Form(None), separator: Optional[str] = Form(None)):
+async def test_models(file: UploadFile, dict_types: str = Form(), dict_values: str = Form(), ids_columns: str = Form(None), target: str = Form(None), n_groups: int = Form(None), sheet_name: Optional[str] = Form(None), separator: Optional[str] = Form(None)):
     dict_types, dict_values = json.loads(dict_types), json.loads(dict_values)
     file_extension = Path(file.filename).suffix.lower()
 
@@ -57,7 +55,7 @@ async def test_models(file: UploadFile, file_extension: str, dict_types: str, di
     df = convert_to_df(BytesIO(contents), file_extension, sheet_name=sheet_name, sep=separator)
     
     if ids_columns:
-        df.drop(columns=ids_columns, inplace=True)
+        df.drop(columns=[column for column in json.loads(ids_columns)], inplace=True)
         
     numericals, categoricals, ordinals = extract_numericals_categoricals_and_ordinals(dict_types)
     
@@ -67,13 +65,28 @@ async def test_models(file: UploadFile, file_extension: str, dict_types: str, di
             cluster_method = "hierarquical"
         else:
             cluster_method = "k-means"
-            
-    test_clustering_algorithms(cluster_method=cluster_method, df=df, dict_values=dict_values, n_groups=n_groups, numericals=numericals, categoricals=categoricals, ordinals=ordinals)
+        
+        df_with_clusters, correlation_pairs = test_clustering_algorithms(cluster_method=cluster_method, df=df, dict_values=dict_values, n_groups=n_groups, numericals=numericals, categoricals=categoricals, ordinals=ordinals)
 
+        # Put the final dataset and the correlation dataset in a zip
+        output = BytesIO()
+        with zipfile.ZipFile(output, "w") as z:
+            z.writestr("dataset.csv", df_with_clusters)
+            z.writestr("correlation.csv", correlation_pairs)
+            
+        output.seek(0)
+        
+        return StreamingResponse(
+            output,
+            media_type="application/zip",
+            headers={
+                "Content-Disposition": "attachment; filename=export.zip"
+            }
+        )
 
 def extract_numericals_categoricals_and_ordinals(dict_types: dict):
     numericals = [key for key in dict_types.keys() if dict_types.get(key) in ["range", "int", "float"]]
-    categoricals = [key for key in dict_types.keys() if dict_types.get(key) == "enum"]
+    categoricals = [key for key in dict_types.keys() if dict_types.get(key) in ["enum", "str"]]
     ordinals = [key for key in dict_types.keys() if dict_types.get(key) == "ordinal"]
     return numericals, categoricals, ordinals
 
