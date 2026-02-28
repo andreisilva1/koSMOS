@@ -15,4 +15,5 @@ class PyObjectId(ObjectId):
 class MLModel(BaseModel):
     name: str
     model: bytes
+    dict_types: str
     

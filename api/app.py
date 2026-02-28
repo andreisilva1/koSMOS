@@ -1,19 +1,16 @@
-
-import base64
 from io import BytesIO
 import json
 from pathlib import Path
 import pickle
 from typing import Optional
-from uuid import UUID, uuid4
 from dotenv import load_dotenv
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi import FastAPI, Form, UploadFile
+from fastapi import FastAPI, Form, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
-import joblib
 
+from checks import check_dict_values
 from database.models import MLModel
-from database.session import save_model
+from database.session import load_model_from_db, save_model
 from model_tests.clustering import test_clustering_algorithms
 from utils import convert_to_df, extract_numericals_categoricals_and_ordinals
 import zipfile
@@ -52,6 +49,10 @@ async def analyze(file: UploadFile, separator: Optional[str] = Form(None), sheet
 @app.post("/test_model", include_in_schema=False)
 async def test_models(file: UploadFile, dict_types: str = Form(), dict_values: str = Form(), ids_columns: str = Form(None), target: str = Form(None), n_groups: int = Form(None), sheet_name: Optional[str] = Form(None), separator: Optional[str] = Form(None)):
     dict_types, dict_values = json.loads(dict_types), json.loads(dict_values)
+    
+    if target:
+        check_dict_values(dict_types, dict_values)
+    
     file_extension = Path(file.filename).suffix.lower()
 
     contents = await file.read()
@@ -91,7 +92,14 @@ async def test_models(file: UploadFile, dict_types: str = Form(), dict_values: s
         )
 
 @app.post("/send_model")
-async def send_model(file: UploadFile, model_id: str = Form(None)):
+async def send_model(file: UploadFile, model_id: str = Form(None), dict_types: str = Form(None)):
     # The bytes of the model will be save in the database
     contents = await file.read()
-    return await save_model(MLModel(name=model_id, model=contents))
+    return await save_model(MLModel(name=model_id, model=contents, dict_types=dict_types))
+
+@app.get("/load_model/{model_id}")
+async def load_model(model_id: str):
+    model = await load_model_from_db(model_id)
+    if model:
+        return json.loads(model["dict_types"])
+    raise HTTPException(status_code=404, detail="No model found with the provided ID.")

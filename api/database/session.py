@@ -20,4 +20,8 @@ async def save_model(ml_model: MLModel):
     result = await collection.insert_one(data)
     new = await collection.find_one({"_id": str(result.inserted_id)})
     return new
+
+async def load_model_from_db(model_id: str):
+    result = await collection.find_one({"name": model_id})
+    return result
     

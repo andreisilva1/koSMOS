@@ -1,3 +1,4 @@
+from fastapi import HTTPException
 import numpy as np
 from pandas import DataFrame
 import pandas as pd
@@ -49,4 +50,26 @@ def check_collinearity(df: DataFrame, target: str = None):
     
     # Return true if one correlation > 0.9, 2 correlations > 0.85, VIF average >= 5, any VIF >= 10 or cond > 100
     return [bool(x) for x in [corr_more_than_90 >= 1, (corr_more_than_85 / len(corr_pairs)) > 0.1, (sum(vif_data.VIF) / len(vif_data)) >= 5, len(vif_data[vif_data["VIF"] >= 10]) > 0, cond > 100]]
+
+def check_dict_values(dict_types: dict, dict_values: dict):
+    error_list = []
+    for key, value in dict_types.items():
+        if not dict_values[key]:
+            error_list.append(f"{key} needs to be provided.")
+            continue
+            
+        if value["col_type"] in ["int", "float"] and type(dict_values[key]) == str:
+            error_list.append(f"{key} needs to be integer.")
+        
+        if value["col_type"] in ["enum", "ordinal"] and type(dict_values[key] not in value["values"]):
+            error_list.append(f"{key} needs to be one of the options: {value['values']}.")
+            
+        if value["col_type"] == "range" and type(dict_values[key] > value["values"][1] or dict_values[key] < value["values"][0]):
+            error_list.append(f"{key} needs to be between: {value['values'][0]} - {value['values'][1]}.")
+            
+        if value["col_type"] == "range" and value["values"][2] == 1 and type(dict_values[key] == float):
+            error_list.append(f"{key} needs to be a integer.")
+    
+    if error_list:
+        raise HTTPException(status_code=400, detail={"error_list": error_list})
     

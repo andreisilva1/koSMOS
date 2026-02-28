@@ -43,9 +43,9 @@ def extract_correlation_pairs(df: pd.DataFrame):
     return corr_pairs
 
 def extract_numericals_categoricals_and_ordinals(dict_types: dict):
-    numericals = [key for key in dict_types.keys() if dict_types.get(key) in ["range", "int", "float"]]
-    categoricals = [key for key in dict_types.keys() if dict_types.get(key) in ["enum", "str"]]
-    ordinals = [key for key in dict_types.keys() if dict_types.get(key) == "ordinal"]
+    numericals = [key for key in dict_types.keys() if dict_types[key]["col_type"] in ["range", "int", "float"]]
+    categoricals = [key for key in dict_types.keys() if dict_types[key]["col_type"] in ["enum", "str"]]
+    ordinals = [key for key in dict_types.keys() if dict_types[key]["col_type"] == "ordinal"]
     return numericals, categoricals, ordinals
 
 def apply_pca(df: DataFrame, X_transformed, df_transformed: DataFrame): # df_transformed = df after the preprocessiing
