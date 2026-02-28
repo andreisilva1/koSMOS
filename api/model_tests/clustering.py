@@ -4,9 +4,10 @@ import optuna
 from pandas import DataFrame
 from sklearn.cluster import KMeans
 from sklearn.compose import ColumnTransformer
-from sklearn.decomposition import PCA
-from sklearn.feature_selection import SelectKBest
-from sklearn.metrics import pairwise_distances, silhouette_score
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import silhouette_score
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler, OneHotEncoder, OrdinalEncoder
 import pandas as pd
 from sklearn.cluster import AgglomerativeClustering, BisectingKMeans
@@ -77,7 +78,7 @@ def test_clustering_algorithms(cluster_method: str, df: DataFrame, dict_values: 
                         best_score = score
                         best_model = model
             best_model.fit(X_transformed)
-            df["groups"] = best_model.labels_
+            df["cluster"] = best_model.labels_
             
 
     if cluster_method == "hierarquical":
@@ -125,9 +126,9 @@ def test_clustering_algorithms(cluster_method: str, df: DataFrame, dict_values: 
         agg_best_sillhouette = silhouette_score(X_transformed, labels=agg_labels)
         div_best_sillhouette = silhouette_score(X_transformed, labels=div_labels)
         best_model = agg_model if agg_best_sillhouette >= div_best_sillhouette else div_model
+        best_model_labels = agg_labels if best_model == agg_model else div_labels
         
-        
-        df["groups"] = best_model.labels_
+        df["cluster"] = best_model_labels
         
     # Final DF (with group column), (if collinear) -> DF with only correlations > 0.6 and all correlations
-    return df.to_csv(index=False), df_high_corr.to_csv(index=False), df_corr.to_csv(index=False), best_model
+    return df.to_csv(index=False), df_high_corr.to_csv(index=False), df_corr.to_csv(index=False), best_model, preprocessor

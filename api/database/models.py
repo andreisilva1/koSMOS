@@ -1,3 +1,5 @@
+from typing import Optional
+
 from bson import ObjectId
 from pydantic import BaseModel
 
@@ -15,5 +17,7 @@ class PyObjectId(ObjectId):
 class MLModel(BaseModel):
     name: str
     model: bytes
+    preprocessor: bytes
     dict_types: str
+    target: Optional[str]
     
