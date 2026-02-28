@@ -3,30 +3,17 @@ from math import ceil
 import optuna
 from pandas import DataFrame
 from sklearn.cluster import KMeans
-from sklearn.compose import ColumnTransformer
-from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import silhouette_score
-from sklearn.neighbors import KNeighborsClassifier
-from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import StandardScaler, OneHotEncoder, OrdinalEncoder
 import pandas as pd
 from sklearn.cluster import AgglomerativeClustering, BisectingKMeans
 
 from checks import check_collinearity
-from utils import apply_pca
+from utils import apply_pca, make_preprocessor
 
-def test_clustering_algorithms(cluster_method: str, df: DataFrame, dict_values: dict, numericals: list, categoricals: list, ordinals: list, n_groups: int = None):    
+def test_clustering_algorithms(cluster_method: str, df: DataFrame, numericals: list, categoricals: list, ordinals: list, n_groups: int = None):    
     # Normalization
-    list_transformers = []
     X = df.copy()
-    if numericals:
-        list_transformers.append(("num", StandardScaler(), numericals))
-    if categoricals:
-        list_transformers.append(("cat", OneHotEncoder(), categoricals))
-    if ordinals:
-        list_transformers.append(("ord", OrdinalEncoder(), ordinals))
-    if list_transformers:
-        preprocessor = ColumnTransformer(transformers=list_transformers)
+    preprocessor = make_preprocessor(numericals, categoricals, ordinals)
         
     X_transformed = preprocessor.fit_transform(X)
     df_transformed = pd.DataFrame(X_transformed, columns=preprocessor.get_feature_names_out())
@@ -38,7 +25,7 @@ def test_clustering_algorithms(cluster_method: str, df: DataFrame, dict_values: 
     df_corr = pd.DataFrame()
     
     if collinear: # If strong collinearity, use PCA -> convert to n_components -> choose the best model by "brute force" or Optuna
-        df_corr, df_high_corr, n_components, X_pca = apply_pca(df, X_transformed, df_transformed) # Return the dataframe with only PCA columns, to calculate the correlation after.
+        df_corr, df_high_corr, n_components, X_pca = apply_pca(X_transformed, df_transformed) # Return the dataframe with only PCA columns, to calculate the correlation after.
         X_transformed = X_pca 
         
     if cluster_method == "k-means": 

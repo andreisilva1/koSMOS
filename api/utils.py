@@ -3,7 +3,9 @@ from io import BytesIO
 
 import pandas as pd
 from pandas import DataFrame
+from sklearn.compose import ColumnTransformer
 from sklearn.decomposition import PCA
+from sklearn.preprocessing import OneHotEncoder, OrdinalEncoder, StandardScaler
 
 def convert_to_df(content: BytesIO, file_extension: str, **kwargs):    
     if file_extension == ".csv":
@@ -48,7 +50,7 @@ def extract_numericals_categoricals_and_ordinals(dict_types: dict):
     ordinals = [key for key in dict_types.keys() if dict_types[key]["col_type"] == "ordinal"]
     return numericals, categoricals, ordinals
 
-def apply_pca(df: DataFrame, X_transformed, df_transformed: DataFrame): # df_transformed = df after the preprocessiing
+def apply_pca(X_transformed, df_transformed: DataFrame): # df_transformed = df after the preprocessiing
     base_pca = PCA()
     base_pca.fit(X_transformed)
     explained_variance = base_pca.explained_variance_ratio_.cumsum()
@@ -60,3 +62,16 @@ def apply_pca(df: DataFrame, X_transformed, df_transformed: DataFrame): # df_tra
     df_corr = pd.DataFrame(corr_pairs)
     df_high_corr = df_corr[abs(df_corr["correlation"]) >= 0.6]   
     return df_corr, df_high_corr, n_components, X_pca
+
+def make_preprocessor(numericals: list = [], categoricals: list = [], ordinals: list = []):
+    list_transformers = []
+    if numericals:
+        list_transformers.append(("num", StandardScaler(), numericals))
+    if categoricals:
+        list_transformers.append(("cat", OneHotEncoder(), categoricals))
+    if ordinals:
+        list_transformers.append(("ord", OrdinalEncoder(), ordinals))
+    if list_transformers:
+        preprocessor = ColumnTransformer(transformers=list_transformers)
+        return preprocessor
+    return None

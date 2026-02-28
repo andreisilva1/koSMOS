@@ -12,9 +12,11 @@ import joblib
 import boto3
 import pandas as pd
 from pandas import DataFrame
+from sklearn.base import r2_score
 from sklearn.cluster import AgglomerativeClustering, BisectingKMeans
 from sklearn.pipeline import Pipeline
-from checks import check_dict_values
+from model_tests.regression import test_regression_algorithms
+from checks import check_dict_values, check_linearity
 from database.models import MLModel
 from database.session import load_model_from_db, save_model
 from model_tests.clustering import test_clustering_algorithms
@@ -80,14 +82,33 @@ async def test_models(dataset_file: UploadFile, dict_types: str = Form(), dict_v
     
     if target:
         check_dict_values(dict_types, dict_values)
-    # No target AND n_groups? Hierarquical cluster, if n_groups, k-means, if target... Let's code yet.
+        
+        # Check if target is numeric or categoric
+        if pd.api.types.is_numeric_dtype(df[target]):
+            predict_dataset, high_correlations, all_correlations, best_model, pp = test_regression_algorithms(target=target, df=df, numericals=numericals, categoricals=categoricals, ordinals=ordinals)
+            ml_model = pickle.dumps(best_model)
+            preprocessor = pickle.dumps(pp)
+            
+            # Put the final dataset, the high correlation, the all correlation dataset and the model itself in a zip
+            output = BytesIO()
+            with zipfile.ZipFile(output, "w") as z:
+                z.writestr("predict_dataset.csv", predict_dataset)
+                z.writestr("high_correlations.csv", high_correlations)
+                z.writestr("all_correlations.csv", all_correlations)
+                z.writestr(f"ml_model.pkl", ml_model)
+                z.writestr(f"preprocessor.pkl", preprocessor)
+
+                
+            output.seek(0)
     if not target:
         if not n_groups:
+            # No target AND n_groups? Hierarquical cluster.
             cluster_method = "hierarquical"
         else:
+            # No target WITH n_groups? K-means.
             cluster_method = "k-means"
         
-        df_with_clusters, high_correlations, all_correlations, best_model, pp = test_clustering_algorithms(cluster_method=cluster_method, df=df, dict_values=dict_values, n_groups=n_groups, numericals=numericals, categoricals=categoricals, ordinals=ordinals)
+        df_with_clusters, high_correlations, all_correlations, best_model, pp = test_clustering_algorithms(cluster_method=cluster_method, df=df, n_groups=n_groups, numericals=numericals, categoricals=categoricals, ordinals=ordinals)
         ml_model = pickle.dumps(best_model)
         preprocessor = pickle.dumps(pp)
         
@@ -103,13 +124,13 @@ async def test_models(dataset_file: UploadFile, dict_types: str = Form(), dict_v
             
         output.seek(0)
         
-        return StreamingResponse(
-            output,
-            media_type="application/zip",
-            headers={
-                "Content-Disposition": "attachment; filename=export.zip"
-            }
-        )
+    return StreamingResponse(
+        output,
+        media_type="application/zip",
+        headers={
+            "Content-Disposition": "attachment; filename=export.zip"
+        }
+    )
 
 @app.post("/send_model")
 async def send_model(preprocessor_file: UploadFile, dataset_file: UploadFile, model_file: UploadFile, model_id: str = Form(None), dict_types: str = Form(None), target: str = Form(None)):
