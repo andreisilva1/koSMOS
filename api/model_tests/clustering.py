@@ -57,9 +57,9 @@ def test_clustering_algorithms(cluster_method: str, df: DataFrame, dict_values: 
             kmeans_study = optuna.create_study(sampler=optuna.samplers.GridSampler(search_space={"n_clusters": [n for n in range(2, n_groups+1)], "max_iter": [n for n in range(200, 501)], "n_init": [n for n in range(10, 31)]}), direction="maximize")
             kmeans_study.optimize(kmeans_optuna, n_trials=20)
             bp = kmeans_study.best_params
-            best_kmeans_model = KMeans(n_clusters=bp["n_clusters"], max_iter=bp["max_iter"], n_init=bp["n_init"])
-            best_kmeans_model.fit(X_transformed)
-            df['groups'] = best_kmeans_model.labels_
+            best_model = KMeans(n_clusters=bp["n_clusters"], max_iter=bp["max_iter"], n_init=bp["n_init"])
+            best_model.fit(X_transformed)
+            df['groups'] = best_model.labels_
         
         # If complexity is not high enough, being collinear or not, just use some "brute force" to decide the best model
         else:
@@ -98,35 +98,36 @@ def test_clustering_algorithms(cluster_method: str, df: DataFrame, dict_values: 
         bp_agg = hierarquical_agg_study.best_params
 
     
-    def hierarquical_div_optuna(trial):
-        n_clusters = trial.suggest_int("n_clusters", 2, ceil(0.5 * len(df)))
+        def hierarquical_div_optuna(trial):
+            n_clusters = trial.suggest_int("n_clusters", 2, ceil(0.5 * len(df)))
+            
+            hieraquical_model = BisectingKMeans(n_clusters=n_clusters)
+            
+            labels = hieraquical_model.fit_predict(X_transformed)
+            
+            silhouette_avg = silhouette_score(X_transformed, labels=labels)
+            
+            return silhouette_avg
         
-        hieraquical_model = BisectingKMeans(n_clusters=n_clusters)
+        search_space ={"n_clusters": [n for n in range(1, 151)]}
+        hierarquical_div_study = optuna.create_study(sampler=optuna.samplers.GridSampler(search_space=search_space), direction="maximize")
+        hierarquical_div_study.optimize(hierarquical_div_optuna, n_trials=20)
         
-        labels = hieraquical_model.fit_predict(X_transformed)
+        bp_div = hierarquical_div_study.best_params
         
-        silhouette_avg = silhouette_score(X_transformed, labels=labels)
+        # Checks which hierarquical model has the best sillhouette_score
+        agg_model = AgglomerativeClustering(n_clusters=bp_agg["n_clusters"], linkage=bp_agg["linkage"])
+        agg_labels = agg_model.fit_predict(X_transformed)
         
-        return silhouette_avg
-    
-    search_space ={"n_clusters": [n for n in range(1, 151)]}
-    hierarquical_div_study = optuna.create_study(sampler=optuna.samplers.GridSampler(search_space=search_space), direction="maximize")
-    hierarquical_div_study.optimize(hierarquical_div_optuna, n_trials=20)
-    
-    bp_div = hierarquical_div_study.best_params
-    
-    # Checks which hierarquical model has the best sillhouette_score
-    agg_model = AgglomerativeClustering(n_clusters=bp_agg["n_clusters"], linkage=bp_agg["linkage"])
-    agg_labels = agg_model.fit_predict(X_transformed)
-    
-    div_model = BisectingKMeans(n_clusters=bp_div["n_clusters"])
-    div_labels = div_model.fit_predict(X_transformed)
-    
-    agg_best_sillhouette = silhouette_score(X_transformed, labels=agg_labels)
-    div_best_sillhouette = silhouette_score(X_transformed, labels=div_labels)
-    best_model = agg_model if agg_best_sillhouette >= div_best_sillhouette else div_best_sillhouette
-    
-    df["groups"] = best_model.labels_
-    
+        div_model = BisectingKMeans(n_clusters=bp_div["n_clusters"])
+        div_labels = div_model.fit_predict(X_transformed)
+        
+        agg_best_sillhouette = silhouette_score(X_transformed, labels=agg_labels)
+        div_best_sillhouette = silhouette_score(X_transformed, labels=div_labels)
+        best_model = agg_model if agg_best_sillhouette >= div_best_sillhouette else div_model
+        
+        
+        df["groups"] = best_model.labels_
+        
     # Final DF (with group column), (if collinear) -> DF with only correlations > 0.6 and all correlations
-    return df.to_csv(index=False), df_high_corr.to_csv(index=False), df_corr.to_csv(index=False)
+    return df.to_csv(index=False), df_high_corr.to_csv(index=False), df_corr.to_csv(index=False), best_model

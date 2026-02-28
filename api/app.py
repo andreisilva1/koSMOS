@@ -1,13 +1,19 @@
 
+import base64
 from io import BytesIO
 import json
 from pathlib import Path
+import pickle
 from typing import Optional
+from uuid import UUID, uuid4
 from dotenv import load_dotenv
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi import FastAPI, Form, UploadFile
 from fastapi.responses import StreamingResponse
+import joblib
 
+from database.models import MLModel
+from database.session import save_model
 from model_tests.clustering import test_clustering_algorithms
 from utils import convert_to_df, extract_numericals_categoricals_and_ordinals
 import zipfile
@@ -63,14 +69,16 @@ async def test_models(file: UploadFile, dict_types: str = Form(), dict_values: s
         else:
             cluster_method = "k-means"
         
-        df_with_clusters, high_correlations, all_correlations = test_clustering_algorithms(cluster_method=cluster_method, df=df, dict_values=dict_values, n_groups=n_groups, numericals=numericals, categoricals=categoricals, ordinals=ordinals)
-
-        # Put the final dataset and the correlation dataset in a zip
+        df_with_clusters, high_correlations, all_correlations, best_model = test_clustering_algorithms(cluster_method=cluster_method, df=df, dict_values=dict_values, n_groups=n_groups, numericals=numericals, categoricals=categoricals, ordinals=ordinals)
+        ml_model = pickle.dumps(best_model)
+        
+        # Put the final dataset, the high correlation, the all correlation dataset and the model itself in a zip
         output = BytesIO()
         with zipfile.ZipFile(output, "w") as z:
             z.writestr("dataset.csv", df_with_clusters)
             z.writestr("high_correlations.csv", high_correlations)
             z.writestr("all_correlations.csv", all_correlations)
+            z.writestr(f"ml_model.pkl", ml_model)
             
         output.seek(0)
         
@@ -82,3 +90,8 @@ async def test_models(file: UploadFile, dict_types: str = Form(), dict_values: s
             }
         )
 
+@app.post("/send_model")
+async def send_model(file: UploadFile, model_id: str = Form(None)):
+    # The bytes of the model will be save in the database
+    contents = await file.read()
+    return await save_model(MLModel(name=model_id, model=contents))
