@@ -8,19 +8,16 @@ from motor.motor_asyncio import AsyncIOMotorClient
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
 from sqlmodel import SQLModel, select
+from database.session import get_session
+from services.model import ModelService
 from checks.database import check_mongo_connection
 from database.models import MLModel, SQLMLModel
 
-# For SQLite fallback
-engine = create_async_engine(url="sqlite+aiosqlite:///local_db.sqlite", echo=False)
-async_session = sessionmaker(bind=engine, class_=AsyncSession, expire_on_commit=False)
+SessionDep = Annotated[AsyncSession, Depends(get_session)]
 
 
-async def get_session():
-    async with async_session() as session:
-        yield session
+def get_model_service(session: SessionDep):
+    return ModelService(session)
 
 
-async def create_local_tables():
-    async with engine.begin() as conn:
-        await conn.run_sync(SQLModel.metadata.create_all)
+ModelServiceDep = Annotated[ModelService, Depends(get_model_service)]

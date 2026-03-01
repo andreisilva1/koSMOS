@@ -4,7 +4,8 @@ from sklearn.linear_model import LinearRegression
 from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import PolynomialFeatures
-from utils import extract_correlation_pairs, make_preprocessor
+from utils.dataframes import make_preprocessor
+from utils.extractors import extract_correlation_pairs
 from checks.statistics import check_linearity
 from sklearn.metrics import r2_score
 

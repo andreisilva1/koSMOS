@@ -7,8 +7,8 @@ from sklearn.metrics import silhouette_score
 import pandas as pd
 from sklearn.cluster import AgglomerativeClustering, BisectingKMeans
 
+from utils.dataframes import apply_pca, make_preprocessor
 from checks.statistics import check_collinearity
-from utils import apply_pca, make_preprocessor
 
 
 def test_clustering_algorithms(

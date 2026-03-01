@@ -15,18 +15,16 @@ import boto3
 import pandas as pd
 from pandas import DataFrame
 from sklearn.pipeline import Pipeline
+from utils.dataframes import compact_file_to_less_than_max_size_mb, return_prediction
+from utils.extractors import extract_numericals_categoricals_and_ordinals
+from utils.conversor import convert_to_df
+from database.session import create_local_tables
+from dependencies import ModelServiceDep
 from checks.request import check_dict_values
 from checks.database import check_aws_connection
 from model_tests.regression import test_regression_algorithms
 from database.models import MLModel
-from database.session import ModelServiceDep, create_local_tables
 from model_tests.clustering import test_clustering_algorithms
-from utils import (
-    compact_file_to_less_than_max_size_mb,
-    convert_to_df,
-    extract_numericals_categoricals_and_ordinals,
-    return_prediction,
-)
 import zipfile
 from cryptography.fernet import Fernet
 from sklearn.neighbors import KNeighborsClassifier
