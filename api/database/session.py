@@ -3,7 +3,7 @@ from typing import Annotated
 from uuid import uuid4
 
 from dotenv import load_dotenv
-from fastapi import Depends
+from fastapi import Depends, HTTPException
 from motor.motor_asyncio import AsyncIOMotorClient
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
@@ -17,20 +17,20 @@ MONGO_URL = os.getenv("DATABASE_URL")
 mongo_db = os.getenv("MONGO_DB")
 mongo_collection = os.getenv("MONGO_COLLECTION")
 
-try:
+ALLOW_LOCAL_FALLBACK = os.getenv("ALLOW_LOCAL_FALLBACK")
+
+if MONGO_URL:
     client = AsyncIOMotorClient(MONGO_URL)
     db = client[mongo_db]
     collection = db[mongo_collection]
 
-except:
+else:
     client = None
     db = None
     collection = None
 
 # For SQLite fallback
-engine = create_async_engine(
-    url="sqlite+aiosqlite:///dataset_local.sqlite", echo=False
-)
+engine = create_async_engine(url="sqlite+aiosqlite:///local_db.sqlite", echo=False)
 async_session = sessionmaker(bind=engine, class_=AsyncSession, expire_on_commit=False)
 
 
@@ -53,23 +53,27 @@ class ModelService:
             data = ml_model.model_dump()
             result = await collection.insert_one(data)
             new_item_id = await collection.find_one({"_id": str(result.inserted_id)})
+
         else:
             new_item = SQLMLModel(id=uuid4(), **ml_model.model_dump())
             self.session.add(new_item)
             await self.session.commit()
             new_item_id = new_item.id
+
         return new_item_id
 
     async def load_model_from_db(self, model_id: str):
-        is_mongo_connected = await check_mongo_connection(client)
-        if is_mongo_connected:
+        try:
             result = await collection.find_one({"name": model_id})
-        else:
-            query = await self.session.execute(
-                select(SQLMLModel).where(SQLMLModel.name == model_id)
-            )
-            result_orm = query.scalar_one_or_none()
-            result = result_orm.model_dump() if result_orm else None
+        except:
+            if bool(ALLOW_LOCAL_FALLBACK):
+                query = await self.session.execute(
+                    select(SQLMLModel).where(SQLMLModel.name == model_id)
+                )
+                result_orm = query.scalar_one_or_none()
+                result = result_orm.model_dump() if result_orm else None
+            else:
+                raise HTTPException(status_code=500, detail="Connection error.")
         return result
 
 

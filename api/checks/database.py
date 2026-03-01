@@ -1,3 +1,4 @@
+import asyncio
 import os
 
 from dotenv import load_dotenv
@@ -27,9 +28,9 @@ def check_aws_connection(
     return False
 
 
-async def check_mongo_connection(client: AsyncIOMotorClient):
+async def check_mongo_connection(client):
     try:
-        await client.admin.command("ping")
+        await asyncio.wait_for(client.admin.command("ping"), timeout=2)
         return True
     except:
         if not bool(ALLOW_LOCAL_FALLBACK):
