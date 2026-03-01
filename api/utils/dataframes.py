@@ -2,6 +2,7 @@ from io import BytesIO
 import os
 
 from dotenv import load_dotenv
+import numpy as np
 import pandas as pd
 from pandas import DataFrame
 from sklearn.compose import ColumnTransformer
@@ -56,3 +57,12 @@ def return_prediction(target: str, df: DataFrame, dict_values: dict, best_model)
 def compact_file_to_less_than_max_size_mb(df: DataFrame):
     # Return a df with 10% less data.
     return df.sample(frac=0.9, random_state=51)
+
+
+def return_accuracy(y_pred, y_test):
+    y_test_arr = np.array(y_test)
+    mask = y_test_arr != 0
+    accuracy = 100 - np.mean(
+        np.abs(y_pred[mask] - y_test_arr[mask]) / np.abs(y_test_arr[mask]) * 100
+    )
+    return accuracy

@@ -1,17 +1,26 @@
 import numpy as np
 from pandas import DataFrame
-from sklearn.ensemble import HistGradientBoostingRegressor, RandomForestRegressor
+from sklearn.ensemble import (
+    AdaBoostClassifier,
+    GradientBoostingRegressor,
+    HistGradientBoostingClassifier,
+    HistGradientBoostingRegressor,
+    RandomForestClassifier,
+    RandomForestRegressor,
+)
 from sklearn.linear_model import LinearRegression
 from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import PolynomialFeatures
-from utils.dataframes import make_preprocessor, return_accuracy
+from sklearn.tree import DecisionTreeClassifier
+from utils.dataframes import make_preprocessor
 from utils.extractors import extract_correlation_pairs
-from checks.statistics import check_linearity
-from sklearn.metrics import r2_score
+from checks.statistics import check_independence, check_linearity
+from sklearn.metrics import r2_score, accuracy_score
 
 
-def test_regression_algorithms(
+# Treinar modelos de LogisticRegression, NaiveBayes e DecisionTree
+def test_classification_algorithms(
     target: str, df: DataFrame, numericals: list, categoricals: list, ordinals: list
 ):
     num_cols = len(df.columns)
@@ -37,21 +46,31 @@ def test_regression_algorithms(
         abs(df_all_correlations["correlation"]) >= 0.6
     ]
 
-    # Clearly linear and few columns -> LinearRegression
-    if is_linear and num_cols <= 10:
-        model, accuracy = train_linear_model(X_transformed, y)
+    len_target = len(df[target].nunique())
+    # Few classes and is linear -> LogisticRegression
+    if is_linear:
+        if len_target < 10:
+            model, accuracy = train_logistic_model(X_transformed, y)
 
-    # Not linear and few columns -> PolynomialRegression
-    elif num_cols <= 10 and not is_linear:
-        model, accuracy = train_polynomial_model(X_transformed, y)
-
-    # Much rows and much columns -> RandomForestRegressor
-    elif num_rows > 1000 and num_cols > 10:
-        model = train_random_forest_regression_model(X_transformed, y)
-
-    # Fallback -> GradientBoostingRegressor
     else:
-        model = train_gradient_boosting_regression_model(X_transformed, y)
+        # Features are approximately independents (or complexe relations)...
+        if check_independence(df, target):
+            # and multiple classes -> NaiveBayes
+            if len_target > 1:
+                model, accuracy = train_naive_model(X_transformed, y)
+
+        # not independents and a short dataset -> DecisionTree
+        elif num_rows < 1000 and num_cols < 10:
+            model = train_decision_tree_model(X_transformed, y)
+
+    if not model:
+        # If no model until here and multiple classes -> RandomForestClassifier
+        if len_target > 1:
+            model = train_random_forest_classifier_model(X_transformed, y)
+
+    # Fallback -> GradientBoostingClassifier
+    else:
+        model = train_gradient_boosting_classifier_model(X_transformed, y)
     return (
         model,
         preprocessor,
@@ -61,7 +80,7 @@ def test_regression_algorithms(
     )
 
 
-def train_linear_model(X_transformed, y):
+def train_logistic_model(X_transformed, y):
     model = LinearRegression()
     X_train, X_test, y_train, y_test = train_test_split(
         X_transformed, y, test_size=0.3, random_state=51, shuffle=True
@@ -69,11 +88,11 @@ def train_linear_model(X_transformed, y):
     model.fit(X_train, y_train)
     y_pred = model.predict(X_test)
 
-    accuracy = return_accuracy(y_pred, y_test)
+    accuracy = accuracy_score(y_pred, y_test)
     return model, accuracy
 
 
-def train_polynomial_model(X_transformed, y):
+def train_naive_model(X_transformed, y):
     X_train, X_test, y_train, y_test = train_test_split(
         X_transformed, y, test_size=0.3, random_state=51, shuffle=True
     )
@@ -111,27 +130,25 @@ def train_polynomial_model(X_transformed, y):
     model.fit(X_train, y_train)
     y_pred = model.predict(X_test)
 
-    accuracy = return_accuracy(y_pred, y_test)
+    accuracy = accuracy_score(y_pred, y_test)
     return model, accuracy
 
 
-def train_random_forest_regression_model(X_transformed, y):
-    # Generic RandomForestRegression
-    model = RandomForestRegressor(
-        n_estimators=200, max_features="sqrt", random_state=51, n_jobs=-1
-    )
+def train_decision_tree_model(X_transformed, y):
+    # Generic GradientBoostingModel
+    model = DecisionTreeClassifier()
     X_train, X_test, y_train, y_test = train_test_split(
         X_transformed, y, test_size=0.3, random_state=51
     )
     model.fit(X_train, y_train)
     y_pred = model.predict(X_test)
-    accuracy = return_accuracy(y_pred, y_test)
+    accuracy = accuracy_score(y_pred, y_test)
     return model, accuracy
 
 
-def train_gradient_boosting_regression_model(X_transformed, y):
-    # Generic GradientBoostingRegression Model
-    model = HistGradientBoostingRegressor(
+def train_gradient_boosting_classifier_model(X_transformed, y):
+    # Generic GradientBoostingClassifier Model
+    model = HistGradientBoostingClassifier(
         max_iter=200,
         min_samples_leaf=20,
         l2_regularization=1.0,
@@ -142,5 +159,23 @@ def train_gradient_boosting_regression_model(X_transformed, y):
     )
     model.fit(X_train, y_train)
     y_pred = model.predict(X_test)
-    accuracy = return_accuracy(y_pred, y_test)
+    accuracy = accuracy_score(y_pred, y_test)
+    return model, accuracy
+
+
+def train_random_forest_classifier_model(X_transformed, y):
+    # Generic RandomForestClassifier Model
+    model = RandomForestClassifier(
+        max_iter=200,
+        min_samples_leaf=20,
+        l2_regularization=1.0,
+        random_state=51,
+    )
+    X_train, X_test, y_train, y_test = train_test_split(
+        X_transformed, y, test_size=0.3, random_state=51
+    )
+    model.fit(X_train, y_train)
+    y_pred = model.predict(X_test)
+    accuracy = accuracy_score(y_pred, y_test)
+
     return model, accuracy

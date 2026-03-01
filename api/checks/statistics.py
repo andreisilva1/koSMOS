@@ -75,3 +75,14 @@ def check_linearity(df: DataFrame, target: str):
     # Compare the prediction with the real values to check linearity
     linearity_score = r2_score(y, linear_model.predict(X))
     return linearity_score > 0.9
+
+
+def check_independence(df: DataFrame, target: str):
+    X = df.drop(columns=target)
+    y = df[target]
+    linear_model = LinearRegression()
+    linear_model.fit(X, y)
+
+    # The same thing as check_linearity, but checking if the features have a huge amount of independence
+    linearity_score = r2_score(y, linear_model.predict(X))
+    return linearity_score < 0.3

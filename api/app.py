@@ -15,6 +15,7 @@ import boto3
 import pandas as pd
 from pandas import DataFrame
 from sklearn.pipeline import Pipeline
+from model_tests.classification import test_classification_algorithms
 from utils.dataframes import compact_file_to_less_than_max_size_mb, return_prediction
 from utils.extractors import extract_numericals_categoricals_and_ordinals
 from utils.conversor import convert_to_df
@@ -167,41 +168,47 @@ async def test_models(
                 )
             )
 
-            ml_model = pickle.dumps(best_model)
-            preprocessor_pkl = pickle.dumps(pp)
-
-            X = df.drop(columns=target)
-            y = df[target]
-
-            X_transformed = pp.fit_transform(X)
-
-            best_model.fit(X_transformed, y)
-            prediction_df = DataFrame([dict_values], columns=X.columns)
-            dict_values_transformed = pp.transform(prediction_df)
-
-            y_predict = best_model.predict(dict_values_transformed)
-            prediction_df[target] = y_predict
-
-            accuracy_df = DataFrame(
-                [{"accuracy": f"{accuracy:.2f}"}], columns=["accuracy"]
-            )
-
-            # Put the final dataset, the high correlation, the all correlation dataset and the model itself in a zip
-            output = BytesIO()
-
-            df_with_prediction = pd.concat([df, prediction_df], ignore_index=True)
-            with zipfile.ZipFile(output, "w") as z:
-                z.writestr("dataset.csv", df_with_prediction.to_csv(index=False)),
-                z.writestr("prediction.csv", prediction_df.to_csv(index=False)),
-                z.writestr("accuracy.csv", accuracy_df.to_csv(index=False)),
-                z.writestr("high_correlations.csv", csv_high_correlations)
-                z.writestr("all_correlations.csv", csv_all_correlations)
-                z.writestr(f"ml_model.pkl", ml_model)
-                z.writestr(f"preprocessor.pkl", preprocessor_pkl)
-
-            output.seek(0)
         else:
-            pass
+            best_model, pp, accuracy, csv_high_correlations, csv_all_correlations = (
+                test_classification_algorithms(
+                    target=target,
+                    df=df,
+                    numericals=numericals,
+                    categoricals=categoricals,
+                    ordinals=ordinals,
+                )
+            )
+        ml_model = pickle.dumps(best_model)
+        preprocessor_pkl = pickle.dumps(pp)
+
+        X = df.drop(columns=target)
+        y = df[target]
+
+        X_transformed = pp.fit_transform(X)
+
+        best_model.fit(X_transformed, y)
+        prediction_df = DataFrame([dict_values], columns=X.columns)
+        dict_values_transformed = pp.transform(prediction_df)
+
+        y_predict = best_model.predict(dict_values_transformed)
+        prediction_df[target] = y_predict
+
+        accuracy_df = DataFrame([{"accuracy": f"{accuracy:.2f}"}], columns=["accuracy"])
+
+        # Put the final dataset, the high correlation, the all correlation dataset and the model itself in a zip
+        output = BytesIO()
+
+        df_with_prediction = pd.concat([df, prediction_df], ignore_index=True)
+        with zipfile.ZipFile(output, "w") as z:
+            z.writestr("dataset.csv", df_with_prediction.to_csv(index=False)),
+            z.writestr("prediction.csv", prediction_df.to_csv(index=False)),
+            z.writestr("accuracy.csv", accuracy_df.to_csv(index=False)),
+            z.writestr("high_correlations.csv", csv_high_correlations)
+            z.writestr("all_correlations.csv", csv_all_correlations)
+            z.writestr(f"ml_model.pkl", ml_model)
+            z.writestr(f"preprocessor.pkl", preprocessor_pkl)
+
+        output.seek(0)
     if not target:
         if not n_groups:
             # No target AND n_groups? Hierarquical cluster.
