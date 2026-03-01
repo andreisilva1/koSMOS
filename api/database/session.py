@@ -47,7 +47,7 @@ class ModelService:
         self.session = session
 
     async def save_model(self, ml_model: MLModel):
-        # Verify MongoDB connection, with SQLite as a local fallback
+        # Verify MongoDB connection, with SQLite as a local fallback (if ALLOW_FALLBACK activated, raise a HTTPException if not the case.)
         is_mongo_connected = await check_mongo_connection(client)
         if is_mongo_connected:
             data = ml_model.model_dump()
@@ -63,17 +63,19 @@ class ModelService:
         return new_item_id
 
     async def load_model_from_db(self, model_id: str):
-        try:
+        # If don't connect to Mongo + ALLOW_FALLBACK deactivated, raise a HTTPException
+        is_mongo_connected = await check_mongo_connection(client)
+
+        if is_mongo_connected:
             result = await collection.find_one({"name": model_id})
-        except:
-            if bool(ALLOW_LOCAL_FALLBACK):
-                query = await self.session.execute(
-                    select(SQLMLModel).where(SQLMLModel.name == model_id)
-                )
-                result_orm = query.scalar_one_or_none()
-                result = result_orm.model_dump() if result_orm else None
-            else:
-                raise HTTPException(status_code=500, detail="Connection error.")
+
+        else:
+            query = await self.session.execute(
+                select(SQLMLModel).where(SQLMLModel.name == model_id)
+            )
+            result_orm = query.scalar_one_or_none()
+            result = result_orm.model_dump() if result_orm else None
+
         return result
 
 

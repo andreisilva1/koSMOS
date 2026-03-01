@@ -7,7 +7,7 @@ import pickle
 from typing import Optional
 from dotenv import load_dotenv
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi import FastAPI, Form, HTTPException, UploadFile
+from fastapi import Body, FastAPI, Form, HTTPException, UploadFile
 from fastapi.responses import JSONResponse, StreamingResponse
 import joblib
 import boto3
@@ -58,7 +58,7 @@ app.add_middleware(
 )
 
 
-@app.post("/analyze")
+@app.post("/analyze", include_in_schema=False)
 async def analyze(
     file: UploadFile,
     separator: Optional[str] = Form(None),
@@ -166,8 +166,11 @@ async def test_models(
 
             # Put the final dataset, the high correlation, the all correlation dataset and the model itself in a zip
             output = BytesIO()
+
+            df_with_prediction = pd.concat([df, prediction_df], ignore_index=True)
             with zipfile.ZipFile(output, "w") as z:
-                z.writestr("dataset.csv", prediction_df.to_csv(index=False)),
+                z.writestr("dataset.csv", df_with_prediction.to_csv(index=False)),
+                z.writestr("prediction.csv", prediction_df.to_csv(index=False)),
                 z.writestr("accuracy.csv", accuracy_df.to_csv(index=False)),
                 z.writestr("high_correlations.csv", csv_high_correlations)
                 z.writestr("all_correlations.csv", csv_all_correlations)
@@ -218,7 +221,7 @@ async def test_models(
     )
 
 
-@app.post("/send_model")
+@app.post("/send_model", include_in_schema=False)
 async def send_model(
     service: ModelServiceDep,
     preprocessor_file: UploadFile,
@@ -266,12 +269,20 @@ async def load_model(service: ModelServiceDep, model_id: str):
     raise HTTPException(status_code=404, detail="No model found with the provided ID.")
 
 
-@app.post("/predict")
-async def predict(service: ModelServiceDep, body: dict):
-    model_id, dict_values = body["model_id"], body["values"]
+@app.post("/predict/{model_id}")
+async def predict(
+    service: ModelServiceDep, model_id: str, dict_values: dict = Body(None)
+):
 
     # Return the model from db by model_id
     model = await service.load_model_from_db(model_id)
+
+    dict_types = json.loads(model["dict_types"])
+    if any(key not in dict_values.keys() for key in dict_types.keys()):
+        raise HTTPException(
+            status_code=400,
+            detail=f"The dict send is not compatible with this model. Expected dict: {dict_types}",
+        )
 
     if model:
         is_aws_connected = check_aws_connection(
@@ -281,19 +292,24 @@ async def predict(service: ModelServiceDep, body: dict):
             AWS_DEFAULT_REGION,
             AWS_SECRET_ACCESS_KEY,
         )
+
+        # If connected with S3, take the file from there, if not AND ALLOW_FALLBACK is activated, take from encrypted_datasets folder.
         if is_aws_connected:
             obj = s3.get_object(Bucket=BUCKET_NAME, Key=model_id)
             dataset_encrypted = obj["Body"].read()
-            dataset_decrypted = fernet.decrypt(dataset_encrypted)
+
         else:
-            pass
+            with open(f"encrypted_datasets/{model_id}", "rb") as f:
+                dataset_encrypted = f.read()
+
+        dataset_decrypted = fernet.decrypt(dataset_encrypted)
+
         df = convert_to_df(BytesIO(dataset_decrypted), ".csv")
 
         output = BytesIO()
         load_model = joblib.load(BytesIO(model["model"]))
         load_preprocessor = joblib.load(BytesIO(model["preprocessor"]))
 
-        dict_types = json.loads(model["dict_types"])
         check_dict_values(dict_types, dict_values)
 
         target = model.get("target", None)
@@ -315,8 +331,6 @@ async def predict(service: ModelServiceDep, body: dict):
             prediction_df[target] = y_predict
 
         # If no target, will use KNeighbors and the dataset with clusters to determine the new item cluster (it depends on the cluster division).
-        # Something to think about: I am saving the model even in cases where it does not have a target, but i don't use that model in the below code.
-        # I think I am forgetting something...
         else:
             model = Pipeline(
                 [
