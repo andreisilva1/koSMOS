@@ -111,3 +111,8 @@ def return_prediction(target: str, df: DataFrame, dict_values: dict, best_model)
     y_predict = best_model.predict(to_predict_df)
     to_predict_df[target] = y_predict
     return to_predict_df
+
+
+def compact_file_to_less_than_max_size_mb(df: DataFrame):
+    # Return a df with 10% less data.
+    return df.sample(frac=0.8, random_state=51)

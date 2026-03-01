@@ -1,4 +1,5 @@
 from contextlib import asynccontextmanager
+from datetime import datetime
 from io import BytesIO
 import json
 import os
@@ -21,6 +22,7 @@ from database.models import MLModel
 from database.session import ModelServiceDep, create_local_tables
 from model_tests.clustering import test_clustering_algorithms
 from utils import (
+    compact_file_to_less_than_max_size_mb,
     convert_to_df,
     extract_numericals_categoricals_and_ordinals,
     return_prediction,
@@ -31,6 +33,10 @@ from sklearn.neighbors import KNeighborsClassifier
 
 load_dotenv()
 
+MAX_POSSIBLE_SIZE_ORIGINAL_FILE = (
+    200 * 1024 * 1024
+)  # If the csv is less than 200mb, will compact him to ~25MB, otherwise, no chance...
+MAX_SIZE_TO_SAVE = 25 * 1024 * 1024  # 25MB is the maximum size of test datasets for now
 s3 = boto3.client("s3")
 BUCKET_NAME = os.getenv("BUCKET_NAME")
 AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID")
@@ -66,10 +72,27 @@ async def analyze(
 ):
     # File reader
     contents = await file.read()
+
+    if len(contents) > MAX_POSSIBLE_SIZE_ORIGINAL_FILE:
+        raise HTTPException(
+            status_code=400,
+            detail=f"The file size exceeds our safe limit ({MAX_SIZE_TO_SAVE / 1024 / 1024:.2f}mb) and our compression limit ({MAX_POSSIBLE_SIZE_ORIGINAL_FILE / 1024 / 1024:.2f}mb).",
+        )
+
     file_extension = Path(file.filename).suffix.lower()
     df = convert_to_df(
         BytesIO(contents), file_extension, sheet_name=sheet_name, sep=separator
     )
+
+    df = convert_to_df(
+        BytesIO(contents), file_extension, sheet_name=sheet_name, sep=separator
+    )
+
+    df_size_in_mb = df.memory_usage(deep=True).sum() / (1024**2)
+
+    while df_size_in_mb > MAX_SIZE_TO_SAVE:
+        # Return a df with 10% less data until it stops exceeding the safe backup limit on S3
+        df = compact_file_to_less_than_max_size_mb(df)
 
     # Convert the numpy classes to primitive classes to return to the frontend
     converted_df = df.convert_dtypes()
@@ -114,11 +137,12 @@ async def test_models(
     sheet_name: Optional[str] = Form(None),
     separator: Optional[str] = Form(None),
 ):
+    contents = await dataset_file.read()
+
     dict_types, dict_values = json.loads(dict_types), json.loads(dict_values)
 
     file_extension = Path(dataset_file.filename).suffix.lower()
 
-    contents = await dataset_file.read()
     df = convert_to_df(
         BytesIO(contents), file_extension, sheet_name=sheet_name, sep=separator
     )
@@ -255,6 +279,7 @@ async def send_model(
             model=model_contents,
             dict_types=dict_types,
             target=target if target else None,
+            created_at=datetime.now(),
         )
     )
     return JSONResponse(status_code=200, content={"detail": "Dataset saved."})
@@ -277,14 +302,13 @@ async def predict(
     # Return the model from db by model_id
     model = await service.load_model_from_db(model_id)
 
-    dict_types = json.loads(model["dict_types"])
-    if any(key not in dict_values.keys() for key in dict_types.keys()):
-        raise HTTPException(
-            status_code=400,
-            detail=f"The dict send is not compatible with this model. Expected dict: {dict_types}",
-        )
-
     if model:
+        dict_types = json.loads(model["dict_types"])
+        if any(key not in dict_values.keys() for key in dict_types.keys()):
+            raise HTTPException(
+                status_code=400,
+                detail=f"The dict send is not compatible with this model. Expected dict: {dict_types}",
+            )
         is_aws_connected = check_aws_connection(
             s3,
             BUCKET_NAME,

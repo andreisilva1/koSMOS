@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Optional
 from uuid import UUID
 
@@ -24,6 +25,7 @@ class MLModel(BaseModel):
     preprocessor: bytes
     dict_types: str
     target: Optional[str]
+    created_at: datetime
 
 
 class SQLMLModel(SQLModel, table=True):
@@ -33,3 +35,4 @@ class SQLMLModel(SQLModel, table=True):
     preprocessor: bytes
     dict_types: str
     target: str = Field(nullable=True)
+    created_at: datetime
