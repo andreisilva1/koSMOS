@@ -1,15 +1,6 @@
-import os
-from typing import Annotated
-from uuid import uuid4
-
-from dotenv import load_dotenv
-from fastapi import Depends, HTTPException
-from motor.motor_asyncio import AsyncIOMotorClient
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
-from sqlmodel import SQLModel, select
-from checks.database import check_mongo_connection
-from database.models import MLModel, SQLMLModel
+from sqlmodel import SQLModel
 
 # For SQLite fallback
 engine = create_async_engine(url="sqlite+aiosqlite:///local_db.sqlite", echo=False)

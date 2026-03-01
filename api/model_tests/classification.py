@@ -1,22 +1,18 @@
-import numpy as np
 from pandas import DataFrame
 from sklearn.ensemble import (
-    AdaBoostClassifier,
-    GradientBoostingRegressor,
     HistGradientBoostingClassifier,
-    HistGradientBoostingRegressor,
     RandomForestClassifier,
-    RandomForestRegressor,
 )
-from sklearn.linear_model import LinearRegression
+from sklearn.feature_selection import SelectKBest, chi2
+from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import train_test_split
-from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import PolynomialFeatures
+from sklearn.naive_bayes import GaussianNB
 from sklearn.tree import DecisionTreeClassifier
+from model_tests.optuna import optuna_test
 from utils.dataframes import make_preprocessor
 from utils.extractors import extract_correlation_pairs
 from checks.statistics import check_independence, check_linearity
-from sklearn.metrics import r2_score, accuracy_score
+from sklearn.metrics import accuracy_score
 
 
 # Treinar modelos de LogisticRegression, NaiveBayes e DecisionTree
@@ -57,7 +53,7 @@ def test_classification_algorithms(
         if check_independence(df, target):
             # and multiple classes -> NaiveBayes
             if len_target > 1:
-                model, accuracy = train_naive_model(X_transformed, y)
+                model, accuracy = train_naive_model(num_cols, X_transformed, y)
 
         # not independents and a short dataset -> DecisionTree
         elif num_rows < 1000 and num_cols < 10:
@@ -81,7 +77,8 @@ def test_classification_algorithms(
 
 
 def train_logistic_model(X_transformed, y):
-    model = LinearRegression()
+    penalty, c_values = optuna_test("logistic", X_transformed, y)
+    model = LogisticRegression(penalty=penalty, C=c_values)
     X_train, X_test, y_train, y_test = train_test_split(
         X_transformed, y, test_size=0.3, random_state=51, shuffle=True
     )
@@ -92,66 +89,62 @@ def train_logistic_model(X_transformed, y):
     return model, accuracy
 
 
-def train_naive_model(X_transformed, y):
+def train_naive_model(num_cols, X_transformed, y):
+    k = optuna_test("naive", X_transformed, y, num_cols)
+
+    model = GaussianNB()
+
     X_train, X_test, y_train, y_test = train_test_split(
         X_transformed, y, test_size=0.3, random_state=51, shuffle=True
     )
-    polynomial_degrees = [n for n in range(1, 11)]
-    best_r2 = -float("inf")
-    best_degree = 1
-    for degree in polynomial_degrees:
-        poly_feat = PolynomialFeatures(degree=degree, include_bias=False)
-        X_train_poly, X_test_poly = poly_feat.fit_transform(
-            X_train
-        ), poly_feat.fit_transform(X_test)
 
-        model = Pipeline(
-            steps=[("poly_feat", poly_feat), ("regressor", LinearRegression())]
-        )
+    kbest = SelectKBest(score_func=chi2, k=k)
 
-        model.fit(X_train_poly, y_train)
-        y_pred = model.predict(X_test_poly)
+    X_train_best_features = kbest.fit_transform(X_train)
+    model.fit(X_train_best_features, y_train)
+    X_test_best_features = kbest.transform(X_test)
+    y_pred = model.predict(X_test_best_features)
 
-        actual_r2 = r2_score(y_test, y_pred)
-
-        if not best_r2:
-            best_r2 = actual_r2
-            best_degree = degree
-
-        elif actual_r2 > best_r2:
-            best_r2 = actual_r2
-            best_degree = degree
-
-    poly_feat = PolynomialFeatures(degree=best_degree)
-    model = Pipeline(
-        steps=[("poly_feat", poly_feat), ("regressor", LinearRegression())]
-    )
-
-    model.fit(X_train, y_train)
-    y_pred = model.predict(X_test)
-
-    accuracy = accuracy_score(y_pred, y_test)
+    accuracy = accuracy_score(y_test, y_pred)
     return model, accuracy
 
 
 def train_decision_tree_model(X_transformed, y):
-    # Generic GradientBoostingModel
-    model = DecisionTreeClassifier()
+    # Hiperparameter tuning
+    min_samples_leaf, max_depth = optuna_test("decision_tree", X_transformed, y)
+
+    model = DecisionTreeClassifier(
+        min_samples_leaf=min_samples_leaf, max_depth=max_depth
+    )
+
     X_train, X_test, y_train, y_test = train_test_split(
         X_transformed, y, test_size=0.3, random_state=51
     )
     model.fit(X_train, y_train)
     y_pred = model.predict(X_test)
-    accuracy = accuracy_score(y_pred, y_test)
+    accuracy = accuracy_score(y_test, y_pred)
     return model, accuracy
 
 
 def train_gradient_boosting_classifier_model(X_transformed, y):
-    # Generic GradientBoostingClassifier Model
+    # Hiperparameter tuning
+    (
+        learning_rate,
+        max_iter,
+        max_depth,
+        min_samples_leaf,
+        max_leaf_nodes,
+        l2_regularization,
+        max_bins,
+    ) = optuna_test("gradient", X_transformed, y, classifier=True)
     model = HistGradientBoostingClassifier(
-        max_iter=200,
-        min_samples_leaf=20,
-        l2_regularization=1.0,
+        learning_rate=learning_rate,
+        max_iter=max_iter,
+        max_depth=max_depth,
+        min_samples_leaf=min_samples_leaf,
+        max_leaf_nodes=max_leaf_nodes,
+        l2_regularization=l2_regularization,
+        max_bins=max_bins,
         random_state=51,
     )
     X_train, X_test, y_train, y_test = train_test_split(
@@ -159,23 +152,38 @@ def train_gradient_boosting_classifier_model(X_transformed, y):
     )
     model.fit(X_train, y_train)
     y_pred = model.predict(X_test)
-    accuracy = accuracy_score(y_pred, y_test)
+    accuracy = accuracy_score(y_test, y_pred)
     return model, accuracy
 
 
 def train_random_forest_classifier_model(X_transformed, y):
-    # Generic RandomForestClassifier Model
+    # Hiperparameter tuning
+    (
+        n_estimators,
+        max_depth,
+        min_samples_split,
+        min_samples_leaf,
+        max_features,
+        bootstrap,
+    ) = optuna_test("random_forest", X_transformed, y, classifier=True)
+
     model = RandomForestClassifier(
+        n_estimators=n_estimators,
+        max_depth=max_depth,
+        min_samples_split=min_samples_split,
+        min_samples_leaf=min_samples_leaf,
+        max_features=max_features,
+        bootstrap=bootstrap,
         max_iter=200,
-        min_samples_leaf=20,
         l2_regularization=1.0,
         random_state=51,
     )
+
     X_train, X_test, y_train, y_test = train_test_split(
         X_transformed, y, test_size=0.3, random_state=51
     )
     model.fit(X_train, y_train)
     y_pred = model.predict(X_test)
-    accuracy = accuracy_score(y_pred, y_test)
+    accuracy = accuracy_score(y_test, y_pred)
 
     return model, accuracy

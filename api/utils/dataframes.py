@@ -1,7 +1,3 @@
-from io import BytesIO
-import os
-
-from dotenv import load_dotenv
 import numpy as np
 import pandas as pd
 from pandas import DataFrame
@@ -9,7 +5,7 @@ from sklearn.compose import ColumnTransformer
 from sklearn.decomposition import PCA
 from sklearn.preprocessing import OneHotEncoder, OrdinalEncoder, StandardScaler
 
-from extractors import extract_correlation_pairs
+from .extractors import extract_correlation_pairs
 
 
 def apply_pca(

@@ -4,7 +4,6 @@ import os
 from dotenv import load_dotenv
 from fastapi import HTTPException
 from botocore.exceptions import ClientError
-from motor.motor_asyncio import AsyncIOMotorClient
 
 load_dotenv()
 ALLOW_LOCAL_FALLBACK = os.getenv("ALLOW_LOCAL_FALLBACK")

@@ -1,4 +1,3 @@
-import numpy as np
 from pandas import DataFrame
 from sklearn.ensemble import HistGradientBoostingRegressor, RandomForestRegressor
 from sklearn.linear_model import LinearRegression
@@ -73,11 +72,11 @@ def train_linear_model(X_transformed, y):
     return model, accuracy
 
 
-def train_polynomial_model(X_transformed, y):
+def train_polynomial_model(num_cols, X_transformed, y):
     X_train, X_test, y_train, y_test = train_test_split(
         X_transformed, y, test_size=0.3, random_state=51, shuffle=True
     )
-    polynomial_degrees = [n for n in range(1, 11)]
+    polynomial_degrees = [n for n in range(1, num_cols)]
     best_r2 = -float("inf")
     best_degree = 1
     for degree in polynomial_degrees:

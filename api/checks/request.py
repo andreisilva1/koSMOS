@@ -24,8 +24,9 @@ def check_dict_values(dict_types: dict, dict_values: dict):
             except:
                 error_list.append(f"{key} needs to be a number.")
 
-        if value["col_type"] in ["enum", "ordinal"] and type(
-            dict_values[key] not in value["values"]
+        if (
+            value["col_type"] in ["enum", "ordinal"]
+            and dict_values[key] not in value["values"]
         ):
             error_list.append(
                 f"{key} needs to be one of the options: {value['values']}."

@@ -130,7 +130,7 @@ async def test_models(
     dataset_file: UploadFile,
     dict_types: str = Form(),
     dict_values: str = Form(),
-    ids_columns: str = Form(None),
+    id_columns: str = Form(None),
     target: str = Form(None),
     n_groups: int = Form(None),
     sheet_name: Optional[str] = Form(None),
@@ -146,8 +146,8 @@ async def test_models(
         BytesIO(contents), file_extension, sheet_name=sheet_name, sep=separator
     )
 
-    if ids_columns:
-        df.drop(columns=[column for column in json.loads(ids_columns)], inplace=True)
+    if id_columns:
+        df.drop(columns=[column for column in json.loads(id_columns)], inplace=True)
 
     numericals, categoricals, ordinals = extract_numericals_categoricals_and_ordinals(
         dict_types
@@ -287,6 +287,7 @@ async def send_model(
             dict_types=dict_types,
             target=target if target else None,
             created_at=datetime.now(),
+            model_type=type(joblib.load(BytesIO(model_contents))),
         )
     )
     return JSONResponse(status_code=200, content={"detail": "Dataset saved."})
