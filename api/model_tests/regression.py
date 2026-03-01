@@ -1,5 +1,6 @@
 import numpy as np
 from pandas import DataFrame
+from sklearn.ensemble import GradientBoostingRegressor, HistGradientBoostingRegressor, RandomForestRegressor
 from sklearn.linear_model import LinearRegression
 from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
@@ -46,13 +47,11 @@ def test_regression_algorithms(
 
     # Much rows and much columns -> RandomForestRegressor
     elif num_rows > 1000 and num_cols > 10:
-        pass
-        # model = train_random_forest_model(X_transformed, y)
+        model = train_random_forest_model(X_transformed, y)
 
     # Fallback -> GradientBoostingRegressor
     else:
-        pass
-        # model = train_gradient_boosting_model(X_transformed, y)
+        model = train_gradient_boosting_model(X_transformed, y)
     return (
         model,
         preprocessor,
@@ -70,12 +69,7 @@ def train_linear_model(X_transformed, y):
     model.fit(X_train, y_train)
     y_pred = model.predict(X_test)
 
-    y_test_arr = np.array(y_test)
-    mask = y_test_arr != 0
-
-    accuracy = 100 - np.mean(
-        np.abs(y_pred[mask] - y_test_arr[mask]) / np.abs(y_test_arr[mask]) * 100
-    )
+    accuracy = return_accuracy(y_pred, y_test)
     return model, accuracy
 
 
@@ -116,10 +110,30 @@ def train_polynomial_model(X_transformed, y):
 
     model.fit(X_train, y_train)
     y_pred = model.predict(X_test)
+    
+    accuracy = return_accuracy(y_pred, y_test)
+    return model, accuracy
+
+def train_random_forest_model(X_transformed, y):
+    model = RandomForestRegressor(random_state=51)
+    X_train, X_test, y_train, y_test = train_test_split(X_transformed, y, test_size=0.3, random_state=51)
+    model.fit(X_train, y_train)
+    y_pred = model.predict(X_test)
+    accuracy = return_accuracy(y_pred, y_test)
+    return model, accuracy
+
+def train_gradient_boosting_model(X_transformed, y):
+    model = HistGradientBoostingRegressor(warm_start=True, random_state=51)
+    X_train, X_test, y_train, y_test = train_test_split(X_transformed, y, test_size=0.3, random_state=51)
+    model.fit(X_train, y_train)
+    y_pred = model.predict(X_test)
+    accuracy = return_accuracy(y_pred, y_test)
+    return model, accuracy
+    
+def return_accuracy(y_pred, y_test):
     y_test_arr = np.array(y_test)
     mask = y_test_arr != 0
-
     accuracy = 100 - np.mean(
         np.abs(y_pred[mask] - y_test_arr[mask]) / np.abs(y_test_arr[mask]) * 100
     )
-    return model, accuracy
+    return accuracy

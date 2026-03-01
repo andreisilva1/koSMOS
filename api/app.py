@@ -200,6 +200,8 @@ async def test_models(
                 z.writestr(f"preprocessor.pkl", preprocessor_pkl)
 
             output.seek(0)
+        else:
+            pass
     if not target:
         if not n_groups:
             # No target AND n_groups? Hierarquical cluster.

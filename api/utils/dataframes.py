@@ -55,4 +55,4 @@ def return_prediction(target: str, df: DataFrame, dict_values: dict, best_model)
 
 def compact_file_to_less_than_max_size_mb(df: DataFrame):
     # Return a df with 10% less data.
-    return df.sample(frac=0.8, random_state=51)
+    return df.sample(frac=0.9, random_state=51)
