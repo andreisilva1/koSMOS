@@ -4,24 +4,29 @@ from sklearn.linear_model import LinearRegression
 from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import PolynomialFeatures
-from utils.dataframes import make_preprocessor, return_accuracy
+from utils.dataframes import make_preprocessor, return_accuracy_regression
 from utils.extractors import extract_correlation_pairs
 from checks.statistics import check_linearity
 from sklearn.metrics import r2_score
 
 
 def test_regression_algorithms(
-    target: str, df: DataFrame, numericals: list, categoricals: list, ordinals: list
+    target: str,
+    df: DataFrame,
+    numericals: list = [],
+    categoricals: list = [],
+    ordinals: list = [],
 ):
     num_cols = len(df.columns)
     num_rows = len(df)
     is_linear = check_linearity(df, target)
-    preprocessor = make_preprocessor(numericals, categoricals, ordinals)
+    X = df.copy()
+    categoricals = X.select_dtypes(include=["object"]).columns
+    preprocessor = make_preprocessor(numericals=numericals, ordinals=ordinals)
     numericals_correlation = [*numericals, target]
     preprocessor_correlations = make_preprocessor(
         numericals_correlation, categoricals, ordinals
     )
-    X = df.copy()
     X_corr_transformed = preprocessor_correlations.fit_transform(X)
     X.drop(columns=target, inplace=True)
     X_transformed = preprocessor.fit_transform(X)
@@ -36,20 +41,25 @@ def test_regression_algorithms(
         abs(df_all_correlations["correlation"]) >= 0.6
     ]
 
+    print("vou comecar a verificar")
     # Clearly linear and few columns -> LinearRegression
     if is_linear and num_cols <= 10:
+        print("linear")
         model, accuracy = train_linear_model(X_transformed, y)
 
     # Not linear and few columns -> PolynomialRegression
-    elif num_cols <= 10 and not is_linear:
+    elif num_cols * 3 <= 30 and not is_linear:
+        print("polinomial")
         model, accuracy = train_polynomial_model(X_transformed, y)
 
     # Much rows and much columns -> RandomForestRegressor
     elif num_rows > 1000 and num_cols > 10:
+        print("forest")
         model = train_random_forest_regression_model(X_transformed, y)
 
     # Fallback -> GradientBoostingRegressor
     else:
+        print("gradient")
         model = train_gradient_boosting_regression_model(X_transformed, y)
     return (
         model,
@@ -68,15 +78,15 @@ def train_linear_model(X_transformed, y):
     model.fit(X_train, y_train)
     y_pred = model.predict(X_test)
 
-    accuracy = return_accuracy(y_pred, y_test)
+    accuracy = return_accuracy_regression(y_pred, y_test)
     return model, accuracy
 
 
-def train_polynomial_model(num_cols, X_transformed, y):
+def train_polynomial_model(X_transformed, y):
     X_train, X_test, y_train, y_test = train_test_split(
         X_transformed, y, test_size=0.3, random_state=51, shuffle=True
     )
-    polynomial_degrees = [n for n in range(1, num_cols)]
+    polynomial_degrees = [1, 2, 3]
     best_r2 = -float("inf")
     best_degree = 1
     for degree in polynomial_degrees:
@@ -102,6 +112,8 @@ def train_polynomial_model(num_cols, X_transformed, y):
             best_r2 = actual_r2
             best_degree = degree
 
+    print(best_degree)
+    print(best_r2)
     poly_feat = PolynomialFeatures(degree=best_degree)
     model = Pipeline(
         steps=[("poly_feat", poly_feat), ("regressor", LinearRegression())]
@@ -110,7 +122,7 @@ def train_polynomial_model(num_cols, X_transformed, y):
     model.fit(X_train, y_train)
     y_pred = model.predict(X_test)
 
-    accuracy = return_accuracy(y_pred, y_test)
+    accuracy = return_accuracy_regression(y_pred, y_test)
     return model, accuracy
 
 
@@ -124,7 +136,7 @@ def train_random_forest_regression_model(X_transformed, y):
     )
     model.fit(X_train, y_train)
     y_pred = model.predict(X_test)
-    accuracy = return_accuracy(y_pred, y_test)
+    accuracy = return_accuracy_regression(y_pred, y_test)
     return model, accuracy
 
 
@@ -141,5 +153,5 @@ def train_gradient_boosting_regression_model(X_transformed, y):
     )
     model.fit(X_train, y_train)
     y_pred = model.predict(X_test)
-    accuracy = return_accuracy(y_pred, y_test)
+    accuracy = return_accuracy_regression(y_pred, y_test)
     return model, accuracy

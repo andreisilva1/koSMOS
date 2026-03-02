@@ -30,8 +30,6 @@ def make_preprocessor(
     list_transformers = []
     if numericals:
         list_transformers.append(("num", StandardScaler(), numericals))
-    if categoricals:
-        list_transformers.append(("cat", OneHotEncoder(), categoricals))
     if ordinals:
         list_transformers.append(("ord", OrdinalEncoder(), ordinals))
     if list_transformers:
@@ -55,10 +53,14 @@ def compact_file_to_less_than_max_size_mb(df: DataFrame):
     return df.sample(frac=0.9, random_state=51)
 
 
-def return_accuracy(y_pred, y_test):
+def return_accuracy_regression(y_pred, y_test):
     y_test_arr = np.array(y_test)
     mask = y_test_arr != 0
     accuracy = 100 - np.mean(
         np.abs(y_pred[mask] - y_test_arr[mask]) / np.abs(y_test_arr[mask]) * 100
     )
     return accuracy
+
+
+def return_accuracy_classification(y_pred, y_test):
+    return (y_pred == y_test).mean() * 100

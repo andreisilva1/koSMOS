@@ -16,7 +16,11 @@ import pandas as pd
 from pandas import DataFrame
 from sklearn.pipeline import Pipeline
 from model_tests.classification import test_classification_algorithms
-from utils.dataframes import compact_file_to_less_than_max_size_mb, return_prediction
+from utils.dataframes import (
+    compact_file_to_less_than_max_size_mb,
+    make_preprocessor,
+    return_prediction,
+)
 from utils.extractors import extract_numericals_categoricals_and_ordinals
 from utils.conversor import convert_to_df
 from database.session import create_local_tables
@@ -149,21 +153,33 @@ async def test_models(
     if id_columns:
         df.drop(columns=[column for column in json.loads(id_columns)], inplace=True)
 
+    real_dict_types = {}
+    cols_to_exclude = []
+    for key, value in dict_types.items():
+        if value["values"] == "any" and value["col_type"] == "str":
+            cols_to_exclude.append(key)
+        else:
+            real_dict_types[key] = value
+
     numericals, categoricals, ordinals = extract_numericals_categoricals_and_ordinals(
-        dict_types
+        real_dict_types
     )
+
+    converted_categoricals_df = pd.get_dummies(df, columns=categoricals, dtype=int)
+
+    if cols_to_exclude:
+        converted_categoricals_df.drop(columns=cols_to_exclude, inplace=True)
 
     if target:
         check_dict_values(dict_types, dict_values)
-
         # Check if target is numeric or categoric
-        if pd.api.types.is_numeric_dtype(df[target]):
+
+        if pd.api.types.is_numeric_dtype(df[target]) and df[target].nunique() > 2:
             best_model, pp, accuracy, csv_high_correlations, csv_all_correlations = (
                 test_regression_algorithms(
                     target=target,
-                    df=df,
+                    df=converted_categoricals_df,
                     numericals=numericals,
-                    categoricals=categoricals,
                     ordinals=ordinals,
                 )
             )
@@ -172,9 +188,8 @@ async def test_models(
             best_model, pp, accuracy, csv_high_correlations, csv_all_correlations = (
                 test_classification_algorithms(
                     target=target,
-                    df=df,
+                    df=converted_categoricals_df,
                     numericals=numericals,
-                    categoricals=categoricals,
                     ordinals=ordinals,
                 )
             )
@@ -228,7 +243,6 @@ async def test_models(
             df=df,
             n_groups=n_groups,
             numericals=numericals,
-            categoricals=categoricals,
             ordinals=ordinals,
         )
         ml_model = pickle.dumps(best_model)

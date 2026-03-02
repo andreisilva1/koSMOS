@@ -5,7 +5,7 @@ from sklearn.ensemble import (
     RandomForestClassifier,
     RandomForestRegressor,
 )
-from sklearn.feature_selection import SelectKBest, chi2
+from sklearn.feature_selection import SelectKBest, f_classif
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import auc, f1_score, log_loss, recall_score, roc_curve
 from sklearn.model_selection import StratifiedKFold, cross_val_score, train_test_split
@@ -61,27 +61,27 @@ def optuna_test(
     if algorithm == "naive":
 
         def naive_bayes_optuna(trial):
-            k = trial.suggest_int("k", 1, num_cols)
+            k = trial.suggest_int("k", 1, num_cols + 1)
 
-            kbest = SelectKBest(score_func=chi2, k=k)
+            kbest = SelectKBest(score_func=f_classif, k=k)
             naive_model = GaussianNB()
 
-            X_train_best_features = kbest.fit_transform(X_train)
+            X_train_best_features = kbest.fit_transform(X_train, y_train)
             naive_model.fit(X_train_best_features, y_train)
             X_test_best_features = kbest.transform(X_test)
             y_pred = naive_model.predict(X_test_best_features)
 
             recall = recall_score(y_test, y_pred, average="macro")
 
-            return k, recall
+            return recall
 
         naive_bayes_seach_space = {"k": [n for n in range(1, num_cols + 1)]}
         naive_bayes_study = optuna.create_study(
             sampler=optuna.samplers.GridSampler(search_space=naive_bayes_seach_space),
-            directions=["minimize", "maximize"],
+            directions=["maximize"],
         )
-        naive_bayes_study.optimize(naive_bayes_optuna, n_trials=20)
-        k = max(naive_bayes_study.best_trials, key=lambda t: t.values[1]).params["k"]
+        naive_bayes_study.optimize(naive_bayes_optuna)
+        k = naive_bayes_study.best_params["k"]
         return k
 
     if algorithm == "decision_tree":
@@ -191,13 +191,13 @@ def optuna_test(
         )
 
     def gradient_boosting_optuna(trial):
-        learning_rate = (trial.suggest_float("learning_rate", 0.01, 0.3),)
-        max_iter = (trial.suggest_int("max_iter", 50, 500),)
-        max_depth = (trial.suggest_int("max_depth", 3, 20),)
-        min_samples_leaf = (trial.suggest_int("min_samples_leaf", 1, 20),)
-        max_leaf_nodes = (trial.suggest_int("max_leaf_nodes", 10, 100),)
-        l2_regularization = (trial.suggest_float("l2_regularization", 0, 10),)
-        max_bins = (trial.suggest_int("max_bins", 100, 255),)
+        learning_rate = trial.suggest_float("learning_rate", 0.01, 0.3)
+        max_iter = trial.suggest_int("max_iter", 50, 500)
+        max_depth = trial.suggest_int("max_depth", 3, 20)
+        min_samples_leaf = trial.suggest_int("min_samples_leaf", 1, 20)
+        max_leaf_nodes = trial.suggest_int("max_leaf_nodes", 10, 100)
+        l2_regularization = trial.suggest_float("l2_regularization", 0, 1.0)
+        max_bins = trial.suggest_int("max_bins", 100, 255)
 
         if classifier:
             hist_gradient_model = HistGradientBoostingClassifier(
@@ -205,7 +205,6 @@ def optuna_test(
                 max_iter=max_iter,
                 max_depth=max_depth,
                 min_samples_leaf=min_samples_leaf,
-                min_samples_split=min_samples_split,
                 max_leaf_nodes=max_leaf_nodes,
                 l2_regularization=l2_regularization,
                 max_bins=max_bins,
@@ -216,7 +215,6 @@ def optuna_test(
                 max_iter=max_iter,
                 max_depth=max_depth,
                 min_samples_leaf=min_samples_leaf,
-                min_samples_split=min_samples_split,
                 max_leaf_nodes=max_leaf_nodes,
                 l2_regularization=l2_regularization,
                 max_bins=max_bins,
@@ -234,7 +232,7 @@ def optuna_test(
         "max_depth": (3, 20),
         "min_samples_leaf": (1, 20),
         "max_leaf_nodes": (10, 100),
-        "l2_regularization": (0, 10),
+        "l2_regularization": [0.0, 0.01, 0.1, 1.0],
         "max_bins": (100, 255),
     }
 

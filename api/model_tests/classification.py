@@ -3,13 +3,13 @@ from sklearn.ensemble import (
     HistGradientBoostingClassifier,
     RandomForestClassifier,
 )
-from sklearn.feature_selection import SelectKBest, chi2
+from sklearn.feature_selection import SelectKBest, f_classif
 from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import train_test_split
 from sklearn.naive_bayes import GaussianNB
 from sklearn.tree import DecisionTreeClassifier
 from model_tests.optuna import optuna_test
-from utils.dataframes import make_preprocessor
+from utils.dataframes import make_preprocessor, return_accuracy_classification
 from utils.extractors import extract_correlation_pairs
 from checks.statistics import check_independence, check_linearity
 from sklearn.metrics import accuracy_score
@@ -17,7 +17,11 @@ from sklearn.metrics import accuracy_score
 
 # Treinar modelos de LogisticRegression, NaiveBayes e DecisionTree
 def test_classification_algorithms(
-    target: str, df: DataFrame, numericals: list, categoricals: list, ordinals: list
+    target: str,
+    df: DataFrame,
+    numericals: list = [],
+    categoricals: list = [],
+    ordinals: list = [],
 ):
     num_cols = len(df.columns)
     num_rows = len(df)
@@ -42,7 +46,7 @@ def test_classification_algorithms(
         abs(df_all_correlations["correlation"]) >= 0.6
     ]
 
-    len_target = len(df[target].nunique())
+    len_target = df[target].nunique()
     # Few classes and is linear -> LogisticRegression
     if is_linear:
         if len_target < 10:
@@ -57,16 +61,16 @@ def test_classification_algorithms(
 
         # not independents and a short dataset -> DecisionTree
         elif num_rows < 1000 and num_cols < 10:
-            model = train_decision_tree_model(X_transformed, y)
+            model, accuracy = train_decision_tree_model(X_transformed, y)
 
     if not model:
         # If no model until here and multiple classes -> RandomForestClassifier
         if len_target > 1:
-            model = train_random_forest_classifier_model(X_transformed, y)
+            model, accuracy = train_random_forest_classifier_model(X_transformed, y)
 
     # Fallback -> GradientBoostingClassifier
     else:
-        model = train_gradient_boosting_classifier_model(X_transformed, y)
+        model, accuracy = train_gradient_boosting_classifier_model(X_transformed, y)
     return (
         model,
         preprocessor,
@@ -90,7 +94,7 @@ def train_logistic_model(X_transformed, y):
 
 
 def train_naive_model(num_cols, X_transformed, y):
-    k = optuna_test("naive", X_transformed, y, num_cols)
+    k = optuna_test("naive", X_transformed, y, num_cols=num_cols)
 
     model = GaussianNB()
 
@@ -98,14 +102,14 @@ def train_naive_model(num_cols, X_transformed, y):
         X_transformed, y, test_size=0.3, random_state=51, shuffle=True
     )
 
-    kbest = SelectKBest(score_func=chi2, k=k)
+    kbest = SelectKBest(score_func=f_classif, k=k)
 
-    X_train_best_features = kbest.fit_transform(X_train)
+    X_train_best_features = kbest.fit_transform(X_train, y_train)
     model.fit(X_train_best_features, y_train)
     X_test_best_features = kbest.transform(X_test)
     y_pred = model.predict(X_test_best_features)
 
-    accuracy = accuracy_score(y_test, y_pred)
+    accuracy = return_accuracy_classification(y_pred, y_test)
     return model, accuracy
 
 
@@ -122,7 +126,7 @@ def train_decision_tree_model(X_transformed, y):
     )
     model.fit(X_train, y_train)
     y_pred = model.predict(X_test)
-    accuracy = accuracy_score(y_test, y_pred)
+    accuracy = return_accuracy_classification(y_pred, y_test)
     return model, accuracy
 
 
@@ -152,7 +156,7 @@ def train_gradient_boosting_classifier_model(X_transformed, y):
     )
     model.fit(X_train, y_train)
     y_pred = model.predict(X_test)
-    accuracy = accuracy_score(y_test, y_pred)
+    accuracy = return_accuracy_classification(y_pred, y_test)
     return model, accuracy
 
 
@@ -184,6 +188,6 @@ def train_random_forest_classifier_model(X_transformed, y):
     )
     model.fit(X_train, y_train)
     y_pred = model.predict(X_test)
-    accuracy = accuracy_score(y_test, y_pred)
+    accuracy = return_accuracy_classification(y_pred, y_test)
 
     return model, accuracy

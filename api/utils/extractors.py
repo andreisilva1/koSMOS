@@ -21,9 +21,7 @@ def extract_numericals_categoricals_and_ordinals(dict_types: dict):
         if dict_types[key]["col_type"] in ["range", "int", "float"]
     ]
     categoricals = [
-        key
-        for key in dict_types.keys()
-        if dict_types[key]["col_type"] in ["enum", "str"]
+        key for key in dict_types.keys() if dict_types[key]["col_type"] in ["enum"]
     ]
     ordinals = [
         key for key in dict_types.keys() if dict_types[key]["col_type"] == "ordinal"
