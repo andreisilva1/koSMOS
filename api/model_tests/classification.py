@@ -50,31 +50,39 @@ def test_classification_algorithms(
     # Few classes and is linear -> LogisticRegression
     if is_linear:
         if len_target < 10:
-            model, accuracy = train_logistic_model(X_transformed, y)
+            model, hiperparameter_df = train_logistic_model(X_transformed, y)
 
     else:
         # Features are approximately independents (or complexe relations)...
         if check_independence(df, target):
             # and multiple classes -> NaiveBayes
             if len_target > 1:
-                model, accuracy = train_naive_model(num_cols, X_transformed, y)
+                model, hiperparameter_df = train_naive_model(
+                    num_cols, X_transformed, y
+                )
 
         # not independents and a short dataset -> DecisionTree
         elif num_rows < 1000 and num_cols < 10:
-            model, accuracy = train_decision_tree_model(X_transformed, y)
+            model, hiperparameter_df = train_decision_tree_model(
+                X_transformed, y
+            )
 
     if not model:
         # If no model until here and multiple classes -> RandomForestClassifier
         if len_target > 1:
-            model, accuracy = train_random_forest_classifier_model(X_transformed, y)
+            model, hiperparameter_df = train_random_forest_classifier_model(
+                X_transformed, y
+            )
 
     # Fallback -> GradientBoostingClassifier
     else:
-        model, accuracy = train_gradient_boosting_classifier_model(X_transformed, y)
+        model, hiperparameter_df = train_gradient_boosting_classifier_model(
+            X_transformed, y
+        )
     return (
         model,
         preprocessor,
-        accuracy,
+        hiperparameter_df,
         df_high_correlations.to_csv(index=False),
         df_all_correlations.to_csv(index=False),
     )
@@ -89,8 +97,12 @@ def train_logistic_model(X_transformed, y):
     model.fit(X_train, y_train)
     y_pred = model.predict(X_test)
 
-    accuracy = accuracy_score(y_pred, y_test)
-    return model, accuracy
+    logistic_hiperparameter_info_df = DataFrame(
+        ["logistic_regression", accuracy, penalty, c_values],
+        columns=["model_type", "accuracy", "penalty", "c_values"],
+    )
+    accuracy = return_accuracy_classification(y_pred, y_test)
+    return model, logistic_hiperparameter_info_df
 
 
 def train_naive_model(num_cols, X_transformed, y):
@@ -109,8 +121,16 @@ def train_naive_model(num_cols, X_transformed, y):
     X_test_best_features = kbest.transform(X_test)
     y_pred = model.predict(X_test_best_features)
 
+    naive_hiperparameter_info_df = DataFrame(
+        [
+            "naive_bayes",
+            accuracy,
+            k,
+        ],
+        columns=["model_type", "accuracy", "k"],
+    )
     accuracy = return_accuracy_classification(y_pred, y_test)
-    return model, accuracy
+    return model, naive_hiperparameter_info_df
 
 
 def train_decision_tree_model(X_transformed, y):
@@ -126,8 +146,12 @@ def train_decision_tree_model(X_transformed, y):
     )
     model.fit(X_train, y_train)
     y_pred = model.predict(X_test)
+    decision_tree_hiperparameter_info_df = DataFrame(
+        ["decision_tree", accuracy, min_samples_leaf, max_depth],
+        columns=["model_type", "accuracy", "min_samples_leaf", "max_depth"],
+    )
     accuracy = return_accuracy_classification(y_pred, y_test)
-    return model, accuracy
+    return model, decision_tree_hiperparameter_info_df
 
 
 def train_gradient_boosting_classifier_model(X_transformed, y):
@@ -156,8 +180,31 @@ def train_gradient_boosting_classifier_model(X_transformed, y):
     )
     model.fit(X_train, y_train)
     y_pred = model.predict(X_test)
+    gradient_boosting_hiperparameter_info_df = DataFrame(
+        [
+            "gradient_boosting",
+            accuracy,
+            learning_rate,
+            max_iter,
+            max_depth,
+            min_samples_leaf,
+            max_leaf_nodes,
+            l2_regularization,
+            max_bins,
+        ],
+        columns=[
+            "model_type",
+            "accuracy" "learning_rate",
+            "max_iter",
+            "max_depth",
+            "min_samples_leaf",
+            "max_leaf_nodes",
+            "l2_regularization",
+            "max_bins",
+        ],
+    )
     accuracy = return_accuracy_classification(y_pred, y_test)
-    return model, accuracy
+    return model, gradient_boosting_hiperparameter_info_df
 
 
 def train_random_forest_classifier_model(X_transformed, y):
@@ -188,6 +235,26 @@ def train_random_forest_classifier_model(X_transformed, y):
     )
     model.fit(X_train, y_train)
     y_pred = model.predict(X_test)
+    random_forest_hiperparameter_info_df = DataFrame(
+        [
+            "random_forest",
+            n_estimators,
+            max_depth,
+            min_samples_split,
+            min_samples_leaf,
+            max_features,
+            bootstrap,
+        ],
+        columns=[
+            "model_type",
+            "accuracy",
+            "n_estimators",
+            "max_depth",
+            "min_samples_split",
+            "min_samples_leaf",
+            "max_features",
+            "bootstrap",
+        ],
+    )
     accuracy = return_accuracy_classification(y_pred, y_test)
-
-    return model, accuracy
+    return model, random_forest_hiperparameter_info_df

@@ -32,20 +32,21 @@ def check_dict_values(dict_types: dict, dict_values: dict):
                 f"{key} needs to be one of the options: {value['values']}."
             )
 
-        if value["col_type"] == "range" and type(
-            dict_values[key] > value["values"][1]
-            or dict_values[key] < value["values"][0]
-        ):
-            error_list.append(
-                f"{key} needs to be between: {value['values'][0]} - {value['values'][1]}."
-            )
+        if value["col_type"] == "range":
+            if value["values"][2] == 1 and type(dict_values[key] == float):
+                error_list.append(f"{key} needs to be a integer.")
 
-        if (
-            value["col_type"] == "range"
-            and value["values"][2] == 1
-            and type(dict_values[key] == float)
-        ):
-            error_list.append(f"{key} needs to be a integer.")
+            elif value["values"][2] == 0:
+                if value["values"][1]:
+                    if dict_values[key] > value["values"][1]:
+                        error_list.append(
+                            f"{key} needs to be less than {value["values"][1]}."
+                        )
+                if value["values"][2]:
+                    if dict_values[key] < value["values"][0]:
+                        error_list.append(
+                            f"{key} needs to be more than {value["values"][1]}."
+                        )
 
     if error_list:
         raise HTTPException(status_code=400, detail={"error_list": error_list})

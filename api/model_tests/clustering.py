@@ -73,18 +73,23 @@ def test_clustering_algorithms(
             )
             kmeans_study.optimize(kmeans_optuna, n_trials=20)
             bp = kmeans_study.best_params
+            best_n_clusters, best_max_iter, best_n_init = bp["n_clusters"], bp["max_iter"], bp["n_init"],
             best_model = KMeans(
                 n_clusters=bp["n_clusters"],
                 max_iter=bp["max_iter"],
                 n_init=bp["n_init"],
             )
+            
             best_model.fit(X_transformed)
             df["groups"] = best_model.labels_
 
         # If complexity is not high enough, being collinear or not, just use some "brute force" to decide the best model
         else:
+            best_n_clusters = n_groups
             best_model = None
             best_score = -1
+            best_n_init = None
+            best_max_iter = None
 
             for n_init in [10, 20, 30]:
                 for max_iter in [200, 500]:
@@ -96,10 +101,14 @@ def test_clustering_algorithms(
                     score = silhouette_score(X_transformed, labels)
 
                     if score > best_score:
+                        best_max_iter = max_iter
+                        best_n_init = n_init
                         best_score = score
                         best_model = model
             best_model.fit(X_transformed)
             df["cluster"] = best_model.labels_
+            
+        hiperparameter_df = DataFrame([["kmeans", best_n_init, best_max_iter, best_n_clusters]], columns=["model_type", "n_init", "max_iter", "n_clusters"])
 
     if cluster_method == "hierarquical":
 
@@ -132,6 +141,7 @@ def test_clustering_algorithms(
         )
         hierarquical_agg_study.optimize(hierarquical_agg_optuna, n_trials=20)
         bp_agg = hierarquical_agg_study.best_params
+        linkage, hierarquical_n_clusters = bp_agg["linkage"], bp_agg["n_clusters"]
 
         def hierarquical_div_optuna(trial):
             n_clusters = trial.suggest_int("n_clusters", 2, ceil(0.5 * len(df)))
@@ -152,6 +162,7 @@ def test_clustering_algorithms(
         hierarquical_div_study.optimize(hierarquical_div_optuna, n_trials=20)
 
         bp_div = hierarquical_div_study.best_params
+        divisive_n_clusters = bp_div["n_clusters"]
 
         # Checks which hierarquical model has the best sillhouette_score
         agg_model = AgglomerativeClustering(
@@ -169,11 +180,17 @@ def test_clustering_algorithms(
         )
         best_model_labels = agg_labels if best_model == agg_model else div_labels
 
+        if isinstance(best_model, AgglomerativeClustering):
+            hiperparameter_df = DataFrame([["aggregative_clustering", linkage, hierarquical_n_clusters]], columns=["model_type", "linkage", "n_clusters"])
+        if isinstance(best_model, BisectingKMeans):
+            hiperparameter_df = DataFrame([["divisive_clustering", divisive_n_clusters]], columns=["model_type", "n_clusters"])
+
         df["cluster"] = best_model_labels
 
     # Final DF (with group column), (if collinear) -> DF with only correlations > 0.6 and all correlations
     return (
         df.to_csv(index=False),
+        hiperparameter_df,
         df_high_corr.to_csv(index=False),
         df_all_correlations.to_csv(index=False),
         best_model,

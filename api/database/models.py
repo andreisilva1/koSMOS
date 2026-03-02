@@ -26,7 +26,6 @@ class MLModel(BaseModel):
     dict_types: str
     target: Optional[str]
     created_at: datetime
-    model_type: str
 
 
 class SQLMLModel(SQLModel, table=True):
@@ -37,4 +36,3 @@ class SQLMLModel(SQLModel, table=True):
     dict_types: str
     target: str = Field(nullable=True)
     created_at: datetime
-    model_type: str

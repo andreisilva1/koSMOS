@@ -153,6 +153,7 @@ async def test_models(
     if id_columns:
         df.drop(columns=[column for column in json.loads(id_columns)], inplace=True)
 
+    
     real_dict_types = {}
     cols_to_exclude = []
     for key, value in dict_types.items():
@@ -175,21 +176,23 @@ async def test_models(
         # Check if target is numeric or categoric
 
         if pd.api.types.is_numeric_dtype(df[target]) and df[target].nunique() > 2:
-            best_model, pp, accuracy, csv_high_correlations, csv_all_correlations = (
+            best_model, pp, hiperparameter_df, csv_high_correlations, csv_all_correlations = (
                 test_regression_algorithms(
                     target=target,
                     df=converted_categoricals_df,
                     numericals=numericals,
+                    categoricals=categoricals,
                     ordinals=ordinals,
                 )
             )
 
         else:
-            best_model, pp, accuracy, csv_high_correlations, csv_all_correlations = (
+            best_model, pp, hiperparameter_df, csv_high_correlations, csv_all_correlations = (
                 test_classification_algorithms(
                     target=target,
                     df=converted_categoricals_df,
                     numericals=numericals,
+                    categoricals=categoricals,
                     ordinals=ordinals,
                 )
             )
@@ -208,16 +211,15 @@ async def test_models(
         y_predict = best_model.predict(dict_values_transformed)
         prediction_df[target] = y_predict
 
-        accuracy_df = DataFrame([{"accuracy": f"{accuracy:.2f}"}], columns=["accuracy"])
 
         # Put the final dataset, the high correlation, the all correlation dataset and the model itself in a zip
         output = BytesIO()
-
+        
         df_with_prediction = pd.concat([df, prediction_df], ignore_index=True)
         with zipfile.ZipFile(output, "w") as z:
             z.writestr("dataset.csv", df_with_prediction.to_csv(index=False)),
             z.writestr("prediction.csv", prediction_df.to_csv(index=False)),
-            z.writestr("accuracy.csv", accuracy_df.to_csv(index=False)),
+            z.writestr("hiperparameter_df.csv", hiperparameter_df.to_csv(index=False)),
             z.writestr("high_correlations.csv", csv_high_correlations)
             z.writestr("all_correlations.csv", csv_all_correlations)
             z.writestr(f"ml_model.pkl", ml_model)
@@ -234,6 +236,7 @@ async def test_models(
 
         (
             df_with_clusters,
+            hiperparameter_df,
             csv_high_correlations,
             csv_all_correlations,
             best_model,
@@ -243,6 +246,7 @@ async def test_models(
             df=df,
             n_groups=n_groups,
             numericals=numericals,
+            categoricals=categoricals,
             ordinals=ordinals,
         )
         ml_model = pickle.dumps(best_model)
@@ -252,6 +256,7 @@ async def test_models(
         output = BytesIO()
         with zipfile.ZipFile(output, "w") as z:
             z.writestr("dataset.csv", df_with_clusters)
+            z.writestr("hiperparameter_df.csv", hiperparameter_df.to_csv(index=False)),
             z.writestr("high_correlations.csv", csv_high_correlations)
             z.writestr("all_correlations.csv", csv_all_correlations)
             z.writestr(f"ml_model.pkl", ml_model)
@@ -301,7 +306,6 @@ async def send_model(
             dict_types=dict_types,
             target=target if target else None,
             created_at=datetime.now(),
-            model_type=type(joblib.load(BytesIO(model_contents))),
         )
     )
     return JSONResponse(status_code=200, content={"detail": "Dataset saved."})
