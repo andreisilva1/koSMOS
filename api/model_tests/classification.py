@@ -57,15 +57,11 @@ def test_classification_algorithms(
         if check_independence(df, target):
             # and multiple classes -> NaiveBayes
             if len_target > 1:
-                model, hiperparameter_df = train_naive_model(
-                    num_cols, X_transformed, y
-                )
+                model, hiperparameter_df = train_naive_model(num_cols, X_transformed, y)
 
         # not independents and a short dataset -> DecisionTree
         elif num_rows < 1000 and num_cols < 10:
-            model, hiperparameter_df = train_decision_tree_model(
-                X_transformed, y
-            )
+            model, hiperparameter_df = train_decision_tree_model(X_transformed, y)
 
     if not model:
         # If no model until here and multiple classes -> RandomForestClassifier

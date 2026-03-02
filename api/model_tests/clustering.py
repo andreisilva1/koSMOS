@@ -73,13 +73,17 @@ def test_clustering_algorithms(
             )
             kmeans_study.optimize(kmeans_optuna, n_trials=20)
             bp = kmeans_study.best_params
-            best_n_clusters, best_max_iter, best_n_init = bp["n_clusters"], bp["max_iter"], bp["n_init"],
+            best_n_clusters, best_max_iter, best_n_init = (
+                bp["n_clusters"],
+                bp["max_iter"],
+                bp["n_init"],
+            )
             best_model = KMeans(
                 n_clusters=bp["n_clusters"],
                 max_iter=bp["max_iter"],
                 n_init=bp["n_init"],
             )
-            
+
             best_model.fit(X_transformed)
             df["groups"] = best_model.labels_
 
@@ -107,8 +111,11 @@ def test_clustering_algorithms(
                         best_model = model
             best_model.fit(X_transformed)
             df["cluster"] = best_model.labels_
-            
-        hiperparameter_df = DataFrame([["kmeans", best_n_init, best_max_iter, best_n_clusters]], columns=["model_type", "n_init", "max_iter", "n_clusters"])
+
+        hiperparameter_df = DataFrame(
+            [["kmeans", best_n_init, best_max_iter, best_n_clusters]],
+            columns=["model_type", "n_init", "max_iter", "n_clusters"],
+        )
 
     if cluster_method == "hierarquical":
 
@@ -181,9 +188,15 @@ def test_clustering_algorithms(
         best_model_labels = agg_labels if best_model == agg_model else div_labels
 
         if isinstance(best_model, AgglomerativeClustering):
-            hiperparameter_df = DataFrame([["aggregative_clustering", linkage, hierarquical_n_clusters]], columns=["model_type", "linkage", "n_clusters"])
+            hiperparameter_df = DataFrame(
+                [["aggregative_clustering", linkage, hierarquical_n_clusters]],
+                columns=["model_type", "linkage", "n_clusters"],
+            )
         if isinstance(best_model, BisectingKMeans):
-            hiperparameter_df = DataFrame([["divisive_clustering", divisive_n_clusters]], columns=["model_type", "n_clusters"])
+            hiperparameter_df = DataFrame(
+                [["divisive_clustering", divisive_n_clusters]],
+                columns=["model_type", "n_clusters"],
+            )
 
         df["cluster"] = best_model_labels
 

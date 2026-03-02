@@ -18,7 +18,6 @@ from sklearn.pipeline import Pipeline
 from model_tests.classification import test_classification_algorithms
 from utils.dataframes import (
     compact_file_to_less_than_max_size_mb,
-    make_preprocessor,
     return_prediction,
 )
 from utils.extractors import extract_numericals_categoricals_and_ordinals
@@ -153,7 +152,6 @@ async def test_models(
     if id_columns:
         df.drop(columns=[column for column in json.loads(id_columns)], inplace=True)
 
-    
     real_dict_types = {}
     cols_to_exclude = []
     for key, value in dict_types.items():
@@ -176,25 +174,33 @@ async def test_models(
         # Check if target is numeric or categoric
 
         if pd.api.types.is_numeric_dtype(df[target]) and df[target].nunique() > 2:
-            best_model, pp, hiperparameter_df, csv_high_correlations, csv_all_correlations = (
-                test_regression_algorithms(
-                    target=target,
-                    df=converted_categoricals_df,
-                    numericals=numericals,
-                    categoricals=categoricals,
-                    ordinals=ordinals,
-                )
+            (
+                best_model,
+                pp,
+                hiperparameter_df,
+                csv_high_correlations,
+                csv_all_correlations,
+            ) = test_regression_algorithms(
+                target=target,
+                df=converted_categoricals_df,
+                numericals=numericals,
+                categoricals=categoricals,
+                ordinals=ordinals,
             )
 
         else:
-            best_model, pp, hiperparameter_df, csv_high_correlations, csv_all_correlations = (
-                test_classification_algorithms(
-                    target=target,
-                    df=converted_categoricals_df,
-                    numericals=numericals,
-                    categoricals=categoricals,
-                    ordinals=ordinals,
-                )
+            (
+                best_model,
+                pp,
+                hiperparameter_df,
+                csv_high_correlations,
+                csv_all_correlations,
+            ) = test_classification_algorithms(
+                target=target,
+                df=converted_categoricals_df,
+                numericals=numericals,
+                categoricals=categoricals,
+                ordinals=ordinals,
             )
         ml_model = pickle.dumps(best_model)
         preprocessor_pkl = pickle.dumps(pp)
@@ -211,10 +217,9 @@ async def test_models(
         y_predict = best_model.predict(dict_values_transformed)
         prediction_df[target] = y_predict
 
-
         # Put the final dataset, the high correlation, the all correlation dataset and the model itself in a zip
         output = BytesIO()
-        
+
         df_with_prediction = pd.concat([df, prediction_df], ignore_index=True)
         with zipfile.ZipFile(output, "w") as z:
             z.writestr("dataset.csv", df_with_prediction.to_csv(index=False)),

@@ -6,7 +6,11 @@ from fastapi import HTTPException
 from botocore.exceptions import ClientError
 
 load_dotenv()
-ALLOW_LOCAL_FALLBACK = os.getenv("ALLOW_LOCAL_FALLBACK") if os.getenv("ALLOW_LOCAL_FALLBACK") is not None else 1
+ALLOW_LOCAL_FALLBACK = (
+    os.getenv("ALLOW_LOCAL_FALLBACK")
+    if os.getenv("ALLOW_LOCAL_FALLBACK") is not None
+    else 1
+)
 
 
 def check_aws_connection(
@@ -25,13 +29,3 @@ def check_aws_connection(
     if not bool(ALLOW_LOCAL_FALLBACK):
         raise HTTPException(status_code=500, detail="Connection error.")
     return False
-
-
-async def check_mongo_connection(client):
-    try:
-        await asyncio.wait_for(client.admin.command("ping"), timeout=2)
-        return True
-    except:
-        if not bool(ALLOW_LOCAL_FALLBACK):
-            raise HTTPException(status_code=500, detail="Error when connecting to DB.")
-        return False
