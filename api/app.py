@@ -1,5 +1,5 @@
 from contextlib import asynccontextmanager
-from datetime import datetime
+from datetime import datetime, timezone
 from io import BytesIO
 import json
 import os
@@ -15,6 +15,7 @@ import boto3
 import pandas as pd
 from pandas import DataFrame
 from sklearn.pipeline import Pipeline
+from utils.global_cleaner import global_cleaner
 from model_tests.classification import test_classification_algorithms
 from utils.dataframes import (
     compact_file_to_less_than_max_size_mb,
@@ -152,22 +153,23 @@ async def test_models(
     if id_columns:
         df.drop(columns=[column for column in json.loads(id_columns)], inplace=True)
 
-    real_dict_types = {}
-    cols_to_exclude = []
+    valid_dict_types = {}
+    any_str_columns = []
     for key, value in dict_types.items():
         if value["values"] == "any" and value["col_type"] == "str":
-            cols_to_exclude.append(key)
+            any_str_columns.append(key)
         else:
-            real_dict_types[key] = value
+            valid_dict_types[key] = value
 
+    clean_df = global_cleaner(df)
+    
     numericals, categoricals, ordinals = extract_numericals_categoricals_and_ordinals(
-        real_dict_types
+        valid_dict_types
     )
 
-    converted_categoricals_df = pd.get_dummies(df, columns=categoricals, dtype=int)
-
-    if cols_to_exclude:
-        converted_categoricals_df.drop(columns=cols_to_exclude, inplace=True)
+    if any_str_columns:
+        clean_df.drop(columns=[col for col in any_str_columns if col in clean_df.columns])
+    converted_categoricals_df = pd.get_dummies(clean_df, columns=categoricals, dtype=int)
 
     if target:
         check_dict_values(dict_types, dict_values)
@@ -310,7 +312,6 @@ async def send_model(
             model=model_contents,
             dict_types=dict_types,
             target=target if target else None,
-            created_at=datetime.now(),
         )
     )
     return JSONResponse(status_code=200, content={"detail": "Dataset saved."})

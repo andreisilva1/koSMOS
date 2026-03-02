@@ -3,6 +3,7 @@ import pandas as pd
 from pandas import DataFrame
 from sklearn.compose import ColumnTransformer
 from sklearn.decomposition import PCA
+from sklearn.impute import SimpleImputer
 from sklearn.preprocessing import OneHotEncoder, OrdinalEncoder, StandardScaler
 
 from .extractors import extract_correlation_pairs
@@ -29,7 +30,8 @@ def make_preprocessor(
 ):
     list_transformers = []
     if numericals:
-        list_transformers.append(("num", StandardScaler(), numericals))
+        list_transformers.append(("inputer", SimpleImputer(strategy="median"), numericals))
+        list_transformers.append(("scaler", StandardScaler(), numericals))
     if ordinals:
         list_transformers.append(("ord", OrdinalEncoder(), ordinals))
     if list_transformers:

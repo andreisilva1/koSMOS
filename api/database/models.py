@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 from uuid import UUID
 
@@ -25,8 +25,7 @@ class MLModel(BaseModel):
     preprocessor: bytes
     dict_types: str
     target: Optional[str]
-    created_at: datetime
-
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 class SQLMLModel(SQLModel, table=True):
     id: UUID = Field(primary_key=True)
