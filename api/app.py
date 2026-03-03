@@ -44,14 +44,19 @@ BUCKET_NAME = os.getenv("BUCKET_NAME")
 AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID")
 AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY")
 AWS_DEFAULT_REGION = os.getenv("AWS_DEFAULT_REGION")
-
+ALLOW_LOCAL_FALLBACK = os.getenv("ALLOW_LOCAL_FALLBACK")
 DATASET_KEY = os.getenv("DATASET_KEY").encode()
 fernet = Fernet(DATASET_KEY)
+
+try:
+    ALLOW_LOCAL_FALLBACK = bool(int(ALLOW_LOCAL_FALLBACK))
+except:
+    ALLOW_LOCAL_FALLBACK = False
 
 
 @asynccontextmanager
 async def lifespan_handler(app: FastAPI):
-    if bool(os.getenv("ALLOW_LOCAL_FALLBACK")):
+    if ALLOW_LOCAL_FALLBACK is True:
         await create_local_tables()
     yield
 
@@ -226,9 +231,7 @@ async def test_models(
         # Put the final dataset, the high correlation, the all correlation dataset and the model itself in a zip
         output = BytesIO()
 
-        df_with_prediction = pd.concat([df, prediction_df], ignore_index=True)
         with zipfile.ZipFile(output, "w") as z:
-            z.writestr("dataset.csv", df_with_prediction.to_csv(index=False)),
             z.writestr("prediction.csv", prediction_df.to_csv(index=False)),
             z.writestr("stats_df.csv", stats_df.to_csv(index=False)),
             z.writestr("high_correlations.csv", csv_high_correlations)

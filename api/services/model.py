@@ -14,11 +14,13 @@ load_dotenv()
 MONGO_URL = os.getenv("DATABASE_URL")
 mongo_db = os.getenv("MONGO_DB")
 mongo_collection = os.getenv("MONGO_COLLECTION")
-ALLOW_LOCAL_FALLBACK = (
-    os.getenv("ALLOW_LOCAL_FALLBACK")
-    if os.getenv("ALLOW_LOCAL_FALLBACK") is not None
-    else 1
-)
+ALLOW_LOCAL_FALLBACK = os.getenv("ALLOW_LOCAL_FALLBACK")
+
+try:
+    ALLOW_LOCAL_FALLBACK = bool(int(ALLOW_LOCAL_FALLBACK))
+except:
+    ALLOW_LOCAL_FALLBACK = False
+
 
 try:
     client = AsyncIOMotorClient(MONGO_URL)
@@ -40,7 +42,7 @@ class ModelService:
                 {"_id": str(result.inserted_id)}
             )
         except:
-            if not bool(ALLOW_LOCAL_FALLBACK):
+            if ALLOW_LOCAL_FALLBACK is False:
                 raise HTTPException(
                     status_code=500, detail="Error when connecting to DB."
                 )
@@ -60,7 +62,7 @@ class ModelService:
                 {"name": model_id}
             )
         except:
-            if not bool(ALLOW_LOCAL_FALLBACK):
+            if ALLOW_LOCAL_FALLBACK is False:
                 raise HTTPException(
                     status_code=500, detail="Error when connecting to DB."
                 )

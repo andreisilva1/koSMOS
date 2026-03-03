@@ -5,11 +5,13 @@ from fastapi import HTTPException
 from botocore.exceptions import ClientError
 
 load_dotenv()
-ALLOW_LOCAL_FALLBACK = (
-    os.getenv("ALLOW_LOCAL_FALLBACK")
-    if os.getenv("ALLOW_LOCAL_FALLBACK") is not None
-    else 1
-)
+
+ALLOW_LOCAL_FALLBACK = os.getenv("ALLOW_LOCAL_FALLBACK")
+
+try:
+    ALLOW_LOCAL_FALLBACK = bool(int(ALLOW_LOCAL_FALLBACK))
+except:
+    ALLOW_LOCAL_FALLBACK = False
 
 
 def check_aws_connection(
@@ -25,6 +27,6 @@ def check_aws_connection(
             return True
         except ClientError:
             raise HTTPException(status_code=500, detail="Connection error.")
-    if not bool(ALLOW_LOCAL_FALLBACK):
+    if ALLOW_LOCAL_FALLBACK is False:
         raise HTTPException(status_code=500, detail="Connection error.")
     return False
