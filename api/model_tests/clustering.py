@@ -15,13 +15,13 @@ def test_clustering_algorithms(
     cluster_method: str,
     df: DataFrame,
     numericals: list,
-    categoricals: list,
     ordinals: list,
     n_groups: int = None,
+    compressed_df: DataFrame = None
 ):
     # Normalization
-    X = df.copy()
-    preprocessor = make_preprocessor(numericals, categoricals, ordinals)
+    X = compressed_df.copy() if len(compressed_df) is not None and len(compressed_df) > 0 else df.copy()
+    preprocessor = make_preprocessor(numericals, ordinals)
 
     X_transformed = preprocessor.fit_transform(X)
     df_transformed = pd.DataFrame(
@@ -85,7 +85,7 @@ def test_clustering_algorithms(
             )
 
             best_model.fit(X_transformed)
-            df["groups"] = best_model.labels_
+            df["cluster"] = best_model.labels_
 
         # If complexity is not high enough, being collinear or not, just use some "brute force" to decide the best model
         else:
@@ -110,18 +110,15 @@ def test_clustering_algorithms(
                         best_score = score
                         best_model = model
             best_model.fit(X_transformed)
-            df["cluster"] = best_model.labels_
-
         hiperparameter_df = DataFrame(
             [["kmeans", best_n_init, best_max_iter, best_n_clusters]],
             columns=["model_type", "n_init", "max_iter", "n_clusters"],
         )
 
     if cluster_method == "hierarquical":
-
         def hierarquical_agg_optuna(trial):
             n_clusters = trial.suggest_int(
-                "n_clusters", 2, ceil(0.5 * len(df))
+                "n_clusters", 2, ceil(0.1 * len(df)) if ceil(0.1 * len(df)) < 200 else 200
             )  # 2 cluster min, half the df size max (so, in the worst case, we will have x clusters with 2 items each
             linkage = trial.suggest_categorical(
                 "linkage", ["ward", "single", "complete", "average"]
@@ -140,7 +137,7 @@ def test_clustering_algorithms(
         hierarquical_agg_study = optuna.create_study(
             sampler=optuna.samplers.GridSampler(
                 search_space={
-                    "n_clusters": [n for n in range(2, ceil(0.5 * len(df)) + 1)],
+                    "n_clusters": [n for n in range(2, ceil(0.1 * len(df)) if ceil(0.1 * len(df)) < 200 else 200)],
                     "linkage": ["ward", "single", "complete", "average"],
                 }
             ),
@@ -185,7 +182,6 @@ def test_clustering_algorithms(
         best_model = (
             agg_model if agg_best_sillhouette >= div_best_sillhouette else div_model
         )
-        best_model_labels = agg_labels if best_model == agg_model else div_labels
 
         if isinstance(best_model, AgglomerativeClustering):
             hiperparameter_df = DataFrame(
@@ -198,11 +194,7 @@ def test_clustering_algorithms(
                 columns=["model_type", "n_clusters"],
             )
 
-        df["cluster"] = best_model_labels
-
-    # Final DF (with group column), (if collinear) -> DF with only correlations > 0.6 and all correlations
     return (
-        df.to_csv(index=False),
         hiperparameter_df,
         df_high_corr.to_csv(index=False),
         df_all_correlations.to_csv(index=False),

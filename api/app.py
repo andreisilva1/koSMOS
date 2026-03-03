@@ -136,6 +136,7 @@ async def test_models(
     dict_values: str = Form(),
     id_columns: str = Form(None),
     target: str = Form(None),
+    target_type: str = Form(None),
     n_groups: int = Form(None),
     sheet_name: Optional[str] = Form(None),
     separator: Optional[str] = Form(None),
@@ -153,38 +154,54 @@ async def test_models(
     if id_columns:
         df.drop(columns=[column for column in json.loads(id_columns)], inplace=True)
 
+    clean_df, compressed_df = global_cleaner(df)
+
     valid_dict_types = {}
     any_str_columns = []
     for key, value in dict_types.items():
-        if value["values"] == "any" and value["col_type"] == "str":
+        if value["values"] == "any" and value["col_type"] == "str": # Remove values any-string from model testing
             any_str_columns.append(key)
         else:
             valid_dict_types[key] = value
 
-    clean_df = global_cleaner(df)
-    
+
     numericals, categoricals, ordinals = extract_numericals_categoricals_and_ordinals(
         valid_dict_types
     )
 
     if any_str_columns:
-        clean_df.drop(columns=[col for col in any_str_columns if col in clean_df.columns])
-    converted_categoricals_df = pd.get_dummies(clean_df, columns=categoricals, dtype=int)
-
+        if len(compressed_df) > 0:
+            compressed_df.drop(
+            columns=[col for col in any_str_columns if col in compressed_df.columns], inplace=True
+        )
+        clean_df.drop(
+            columns=[col for col in any_str_columns if col in clean_df.columns], inplace=True
+        )
+    
+    if len(compressed_df) > 0:
+        compressed_df = pd.get_dummies(
+        compressed_df, columns=categoricals, dtype=int
+    )
+        
+    clean_df_with_converted_categoricals_to_dummies = pd.get_dummies(
+        clean_df, columns=categoricals, dtype=int
+    )
+        
     if target:
         check_dict_values(dict_types, dict_values)
         # Check if target is numeric or categoric
 
-        if pd.api.types.is_numeric_dtype(df[target]) and df[target].nunique() > 2:
+        if pd.api.types.is_numeric_dtype(df[target]) and target_type == "numerical":
             (
                 best_model,
                 pp,
-                hiperparameter_df,
+                stats_df,
                 csv_high_correlations,
                 csv_all_correlations,
             ) = test_regression_algorithms(
                 target=target,
-                df=converted_categoricals_df,
+                compressed_df=compressed_df,
+                df=clean_df_with_converted_categoricals_to_dummies,
                 numericals=numericals,
                 categoricals=categoricals,
                 ordinals=ordinals,
@@ -194,12 +211,13 @@ async def test_models(
             (
                 best_model,
                 pp,
-                hiperparameter_df,
+                stats_df,
                 csv_high_correlations,
                 csv_all_correlations,
             ) = test_classification_algorithms(
                 target=target,
-                df=converted_categoricals_df,
+                compressed_df=compressed_df,
+                df=clean_df_with_converted_categoricals_to_dummies,
                 numericals=numericals,
                 categoricals=categoricals,
                 ordinals=ordinals,
@@ -226,7 +244,7 @@ async def test_models(
         with zipfile.ZipFile(output, "w") as z:
             z.writestr("dataset.csv", df_with_prediction.to_csv(index=False)),
             z.writestr("prediction.csv", prediction_df.to_csv(index=False)),
-            z.writestr("hiperparameter_df.csv", hiperparameter_df.to_csv(index=False)),
+            z.writestr("stats_df.csv", stats_df.to_csv(index=False)),
             z.writestr("high_correlations.csv", csv_high_correlations)
             z.writestr("all_correlations.csv", csv_all_correlations)
             z.writestr(f"ml_model.pkl", ml_model)
@@ -242,28 +260,32 @@ async def test_models(
             cluster_method = "k-means"
 
         (
-            df_with_clusters,
-            hiperparameter_df,
+            stats_df,
             csv_high_correlations,
             csv_all_correlations,
             best_model,
             pp,
         ) = test_clustering_algorithms(
             cluster_method=cluster_method,
-            df=df,
+                            compressed_df=compressed_df,
+
+            df=clean_df_with_converted_categoricals_to_dummies,
             n_groups=n_groups,
             numericals=numericals,
-            categoricals=categoricals,
             ordinals=ordinals,
         )
+        X_transformed = pp.fit_transform(df)
+        
         ml_model = pickle.dumps(best_model)
         preprocessor = pickle.dumps(pp)
 
+        best_model.fit_predict(X_transformed)
+        df["cluster"] = best_model.labels_
         # Put the final dataset, the high correlation, the all correlation dataset and the model itself in a zip
         output = BytesIO()
         with zipfile.ZipFile(output, "w") as z:
-            z.writestr("dataset.csv", df_with_clusters)
-            z.writestr("hiperparameter_df.csv", hiperparameter_df.to_csv(index=False)),
+            z.writestr("dataset.csv", df.to_csv(index=False))
+            z.writestr("stats_df.csv", stats_df.to_csv(index=False)),
             z.writestr("high_correlations.csv", csv_high_correlations)
             z.writestr("all_correlations.csv", csv_all_correlations)
             z.writestr(f"ml_model.pkl", ml_model)

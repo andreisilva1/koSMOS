@@ -27,6 +27,7 @@ class MLModel(BaseModel):
     target: Optional[str]
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
+
 class SQLMLModel(SQLModel, table=True):
     id: UUID = Field(primary_key=True)
     name: str

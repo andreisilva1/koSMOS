@@ -49,7 +49,7 @@ def check_collinearity(df: DataFrame, target: str = None):
         variance_inflation_factor(X.values, i) for i in range(X.shape[1])
     ]
 
-    # Numeric stability of the X matriz - Detect when small variations in data can cause large changes in coefficients
+    # Numeric stability of the X matrix - Detect when small variations in data can cause large changes in coefficients
     cond = np.linalg.cond(StandardScaler().fit_transform(X))
 
     # Return true if one correlation > 0.9, 2 correlations > 0.85, VIF average >= 5, any VIF >= 10 or cond > 100
