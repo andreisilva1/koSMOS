@@ -154,7 +154,7 @@ async def test_models(
     if id_columns:
         df.drop(columns=[column for column in json.loads(id_columns)], inplace=True)
 
-    clean_df, compressed_df = global_cleaner(df)
+    clean_df = global_cleaner(df)
 
     valid_dict_types = {}
     any_str_columns = []
@@ -171,24 +171,10 @@ async def test_models(
     )
 
     if any_str_columns:
-        if len(compressed_df) > 0:
-            compressed_df.drop(
-                columns=[
-                    col for col in any_str_columns if col in compressed_df.columns
-                ],
-                inplace=True,
-            )
         clean_df.drop(
             columns=[col for col in any_str_columns if col in clean_df.columns],
             inplace=True,
         )
-
-    if len(compressed_df) > 0:
-        compressed_df = pd.get_dummies(compressed_df, columns=categoricals, dtype=int)
-
-    clean_df_with_converted_categoricals_to_dummies = pd.get_dummies(
-        clean_df, columns=categoricals, dtype=int
-    )
 
     if target:
         check_dict_values(dict_types, dict_values)
@@ -203,8 +189,7 @@ async def test_models(
                 csv_all_correlations,
             ) = test_regression_algorithms(
                 target=target,
-                compressed_df=compressed_df,
-                df=clean_df_with_converted_categoricals_to_dummies,
+                df=clean_df,
                 numericals=numericals,
                 categoricals=categoricals,
                 ordinals=ordinals,
@@ -219,8 +204,7 @@ async def test_models(
                 csv_all_correlations,
             ) = test_classification_algorithms(
                 target=target,
-                compressed_df=compressed_df,
-                df=clean_df_with_converted_categoricals_to_dummies,
+                df=clean_df,
                 numericals=numericals,
                 categoricals=categoricals,
                 ordinals=ordinals,
@@ -270,8 +254,7 @@ async def test_models(
             pp,
         ) = test_clustering_algorithms(
             cluster_method=cluster_method,
-            compressed_df=compressed_df,
-            df=clean_df_with_converted_categoricals_to_dummies,
+            df=clean_df,
             n_groups=n_groups,
             numericals=numericals,
             ordinals=ordinals,

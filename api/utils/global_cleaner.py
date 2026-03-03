@@ -17,16 +17,16 @@ def global_cleaner(df: DataFrame, target: str = None):
 
             strat_df = clean_df[clean_df[target].isin(valid_classes)]
 
-            compressed_df = strat_df.groupby(target, group_keys=False).apply(
+            clean_df = strat_df.groupby(target, group_keys=False).apply(
                 lambda x: x.sample(
                     max(1, int(MAX_ROWS * len(x) / len(strat_df))), random_state=51
                 )
             )
 
-            compressed_df = compressed_df.sample(n=MAX_ROWS, random_state=51)
+            clean_df = clean_df.sample(n=MAX_ROWS, random_state=51)
 
         else:
-            compressed_df = df.sample(n=MAX_ROWS, random_state=51)
+            clean_df = df.sample(n=MAX_ROWS, random_state=51)
             # Types normalization
     for col in clean_df.columns:
         if pd.api.types.is_object_dtype(clean_df[col]) or pd.api.types.is_string_dtype(
@@ -76,4 +76,4 @@ def global_cleaner(df: DataFrame, target: str = None):
     if much_missing_values_columns:
         clean_df.drop(columns=much_missing_values_columns, inplace=True)
 
-    return clean_df, compressed_df
+    return clean_df

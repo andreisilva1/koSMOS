@@ -22,26 +22,17 @@ def test_classification_algorithms(
     numericals: list = [],
     categoricals: list = [],
     ordinals: list = [],
-    compressed_df: DataFrame = None,
 ):
     num_cols = len(df.columns)
     num_rows = len(df)
     is_linear = check_linearity(df, target)
-    preprocessor = make_preprocessor(numericals, ordinals)
-    preprocessor_correlations = make_preprocessor(numericals, ordinals)
-    X = (
-        compressed_df.copy()
-        if len(compressed_df) > 0 and compressed_df is not None
-        else df.copy()
-    )
+    preprocessor = make_preprocessor(numericals, categoricals, ordinals)
+    preprocessor_correlations = make_preprocessor(numericals, categoricals, ordinals)
+    X = df.copy()
     X_corr_transformed = preprocessor_correlations.fit_transform(X)
     X.drop(columns=target, inplace=True)
     X_transformed = preprocessor.fit_transform(X)
-    y = (
-        compressed_df[target]
-        if len(compressed_df) is not None and len(compressed_df) > 0
-        else df[target]
-    )
+    y = df[target]
 
     df_transformed = DataFrame(
         X_corr_transformed, columns=preprocessor_correlations.get_feature_names_out()

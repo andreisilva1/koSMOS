@@ -16,18 +16,15 @@ def test_regression_algorithms(
     numericals: list = [],
     categoricals: list = [],
     ordinals: list = [],
-    compressed_df: DataFrame = None,
 ):
-    num_cols = len(df.columns)
+    num_cols = len(df)
     num_rows = len(df)
     is_linear = check_linearity(df, target)
-    X = (
-        compressed_df.copy()
-        if len(compressed_df) is not None and len(compressed_df) > 0
-        else df.copy()
+    X = df.copy()
+
+    preprocessor = make_preprocessor(
+        numericals=numericals, categoricals=categoricals, ordinals=ordinals
     )
-    categoricals = X.select_dtypes(include=["object"]).columns
-    preprocessor = make_preprocessor(numericals=numericals, ordinals=ordinals)
     numericals_correlation = [*numericals, target]
     preprocessor_correlations = make_preprocessor(
         numericals_correlation, categoricals, ordinals
@@ -35,11 +32,7 @@ def test_regression_algorithms(
     X_corr_transformed = preprocessor_correlations.fit_transform(X)
     X.drop(columns=target, inplace=True)
     X_transformed = preprocessor.fit_transform(X)
-    y = (
-        compressed_df[target]
-        if len(compressed_df) is not None and len(compressed_df) > 0
-        else df[target]
-    )
+    y = df[target]
 
     df_transformed = DataFrame(
         X_corr_transformed, columns=preprocessor_correlations.get_feature_names_out()
@@ -52,18 +45,22 @@ def test_regression_algorithms(
 
     # Clearly linear and few columns -> LinearRegression
     if is_linear and num_cols <= 10:
+        print("LINEAR")
         model, accuracy = train_linear_model(X_transformed, y)
 
     # Not linear and few columns -> PolynomialRegression
     elif num_cols * 3 <= 30 and not is_linear:
+        print("POLYNOMIAL")
         model, accuracy = train_polynomial_model(X_transformed, y)
 
     # Much rows and much columns -> RandomForestRegressor
     elif num_rows > 1000 and num_cols > 10:
+        print("RANDOM FOREST")
         model, accuracy = train_random_forest_regression_model(X_transformed, y)
 
     # Fallback -> GradientBoostingRegressor
     else:
+        print("GRADIENT BOOSTING")
         model, accuracy = train_gradient_boosting_regression_model(X_transformed, y)
 
     hiperparameter_df = DataFrame([[f"{accuracy:.2f}"]], columns=["accuracy"])

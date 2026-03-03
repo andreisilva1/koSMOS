@@ -4,7 +4,7 @@ from pandas import DataFrame
 from sklearn.compose import ColumnTransformer
 from sklearn.decomposition import PCA
 from sklearn.preprocessing import OneHotEncoder, OrdinalEncoder, StandardScaler
-
+from sklearn.metrics import accuracy_score
 from .extractors import extract_correlation_pairs
 
 
@@ -58,12 +58,12 @@ def compact_file_to_less_than_max_size_mb(df: DataFrame):
 
 
 def return_accuracy_regression(y_pred, y_test):
-    y_test_arr = np.array(y_test)
-    mask = y_test_arr != 0
-    accuracy = 100 - np.mean(
-        np.abs(y_pred[mask] - y_test_arr[mask]) / np.abs(y_test_arr[mask]) * 100
-    )
-    return accuracy
+    tolerancy = 0.10  # considers the prediction that “the error will be no more than 10% of the actual value” to be correct (the old formula returned extreme negative values, for a unknown reason)
+
+    correct_guesses = np.abs((y_test - y_pred) / y_test) < tolerancy
+
+    accuracy = np.mean(correct_guesses)
+    return accuracy * 100
 
 
 def return_accuracy_classification(y_pred, y_test):

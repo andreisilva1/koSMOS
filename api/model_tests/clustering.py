@@ -17,14 +17,9 @@ def test_clustering_algorithms(
     numericals: list,
     ordinals: list,
     n_groups: int = None,
-    compressed_df: DataFrame = None,
 ):
     # Normalization
-    X = (
-        compressed_df.copy()
-        if len(compressed_df) is not None and len(compressed_df) > 0
-        else df.copy()
-    )
+    X = df.copy()
     preprocessor = make_preprocessor(numericals, ordinals)
 
     X_transformed = preprocessor.fit_transform(X)
