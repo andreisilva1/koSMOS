@@ -23,6 +23,7 @@ class MLModel(BaseModel):
     name: str
     model: bytes
     preprocessor: bytes
+    knn: bytes | None = None
     dict_types: str
     target: Optional[str]
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
@@ -33,6 +34,7 @@ class SQLMLModel(SQLModel, table=True):
     name: str
     model: bytes
     preprocessor: bytes
+    knn: bytes = Field(nullable=True)
     dict_types: str
     target: str = Field(nullable=True)
     created_at: datetime

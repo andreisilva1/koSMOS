@@ -7,6 +7,7 @@ from sklearn.feature_selection import SelectKBest, f_classif
 from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import train_test_split
 from sklearn.naive_bayes import GaussianNB
+from sklearn.pipeline import Pipeline
 from sklearn.tree import DecisionTreeClassifier
 from model_tests.optuna import optuna_test
 from utils.dataframes import make_preprocessor, return_accuracy_classification
@@ -81,11 +82,16 @@ def test_classification_algorithms(
     )
 
 
-def train_logistic_model(X_transformed, y):
+def train_logistic_model(X_transformed, y, preprocessor):
     penalty, c_values = optuna_test(
         algorithm="logistic", X_transformed=X_transformed, y=y
     )
-    model = LogisticRegression(penalty=penalty, C=c_values)
+    model = Pipeline(
+        steps=[
+            ("preprocessor", preprocessor),
+            ("logistic_regression", LogisticRegression(penalty=penalty, C=c_values)),
+        ]
+    )
     X_train, X_test, y_train, y_test = train_test_split(
         X_transformed, y, test_size=0.3, random_state=51, shuffle=True
     )
@@ -102,12 +108,12 @@ def train_logistic_model(X_transformed, y):
     return model, logistic_hiperparameter_info_df
 
 
-def train_naive_model(num_cols, X_transformed, y):
+def train_naive_model(num_cols, X_transformed, y, preprocessor):
     k = optuna_test(
         algorithm="naive", X_transformed=X_transformed, y=y, num_cols=num_cols
     )
 
-    model = GaussianNB()
+    model = Pipeline(steps=[("preprocessor", preprocessor), ("naive", GaussianNB())])
 
     X_train, X_test, y_train, y_test = train_test_split(
         X_transformed, y, test_size=0.3, random_state=51, shuffle=True
@@ -135,14 +141,22 @@ def train_naive_model(num_cols, X_transformed, y):
     return model, naive_hiperparameter_info_df
 
 
-def train_decision_tree_model(X_transformed, y):
+def train_decision_tree_model(X_transformed, y, preprocessor):
     # Hiperparameter tuning
     min_samples_leaf, max_depth = optuna_test(
         algorithm="decision_tree", X_transformed=X_transformed, y=y
     )
 
-    model = DecisionTreeClassifier(
-        min_samples_leaf=min_samples_leaf, max_depth=max_depth
+    model = Pipeline(
+        steps=[
+            ("preprocessor", preprocessor),
+            (
+                "decision_tree_classifier",
+                DecisionTreeClassifier(
+                    min_samples_leaf=min_samples_leaf, max_depth=max_depth
+                ),
+            ),
+        ]
     )
 
     X_train, X_test, y_train, y_test = train_test_split(
@@ -160,7 +174,7 @@ def train_decision_tree_model(X_transformed, y):
     return model, decision_tree_hiperparameter_info_df
 
 
-def train_gradient_boosting_classifier_model(X_transformed, y):
+def train_gradient_boosting_classifier_model(X_transformed, y, preprocessor):
     # Hiperparameter tuning
     (
         learning_rate,
@@ -173,15 +187,23 @@ def train_gradient_boosting_classifier_model(X_transformed, y):
     ) = optuna_test(
         algorithm="gradient", X_transformed=X_transformed, y=y, classifier=True
     )
-    model = HistGradientBoostingClassifier(
-        learning_rate=learning_rate,
-        max_iter=max_iter,
-        max_depth=max_depth,
-        min_samples_leaf=min_samples_leaf,
-        max_leaf_nodes=max_leaf_nodes,
-        l2_regularization=l2_regularization,
-        max_bins=max_bins,
-        random_state=51,
+    model = Pipeline(
+        steps=[
+            ("preprocessor", preprocessor),
+            (
+                "hist_gradient",
+                HistGradientBoostingClassifier(
+                    learning_rate=learning_rate,
+                    max_iter=max_iter,
+                    max_depth=max_depth,
+                    min_samples_leaf=min_samples_leaf,
+                    max_leaf_nodes=max_leaf_nodes,
+                    l2_regularization=l2_regularization,
+                    max_bins=max_bins,
+                    random_state=51,
+                ),
+            ),
+        ]
     )
     X_train, X_test, y_train, y_test = train_test_split(
         X_transformed, y, test_size=0.3, random_state=51
@@ -220,7 +242,7 @@ def train_gradient_boosting_classifier_model(X_transformed, y):
     return model, gradient_boosting_hiperparameter_info_df
 
 
-def train_random_forest_classifier_model(X_transformed, y):
+def train_random_forest_classifier_model(X_transformed, y, preprocessor):
     # Hiperparameter tuning
     (
         n_estimators,
@@ -233,14 +255,22 @@ def train_random_forest_classifier_model(X_transformed, y):
         algorithm="random_forest", X_transformed=X_transformed, y=y, classifier=True
     )
 
-    model = RandomForestClassifier(
-        n_estimators=n_estimators,
-        max_depth=max_depth,
-        min_samples_split=min_samples_split,
-        min_samples_leaf=min_samples_leaf,
-        max_features=max_features,
-        bootstrap=bootstrap,
-        random_state=51,
+    model = Pipeline(
+        steps=[
+            ("preprocessor", preprocessor),
+            (
+                "random_forest_classifier",
+                RandomForestClassifier(
+                    n_estimators=n_estimators,
+                    max_depth=max_depth,
+                    min_samples_split=min_samples_split,
+                    min_samples_leaf=min_samples_leaf,
+                    max_features=max_features,
+                    bootstrap=bootstrap,
+                    random_state=51,
+                ),
+            ),
+        ]
     )
 
     X_train, X_test, y_train, y_test = train_test_split(

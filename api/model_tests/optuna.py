@@ -34,9 +34,10 @@ def optuna_test(
     classifier: bool = False,
     n_trials: int = 20,
 ):
-    X_train, X_test, y_train, y_test = train_test_split(
-        X_transformed, y, test_size=0.3, random_state=51, shuffle=True
-    )
+    if y:
+        X_train, X_test, y_train, y_test = train_test_split(
+            X_transformed, y, test_size=0.3, random_state=51, shuffle=True
+        )
 
     if algorithm == "logistic":
 
@@ -325,7 +326,7 @@ def optuna_test(
             n_clusters = trial.suggest_int(
                 "n_clusters",
                 2,
-                ceil(0.1 * len(num_rows)) if ceil(0.1 * len(num_rows)) < 200 else 200,
+                ceil(0.1 * num_rows) if ceil(0.1 * num_rows) < 200 else 200,
             )  # 2 cluster min, 200 clusters max
             linkage = trial.suggest_categorical(
                 "linkage", ["ward", "single", "complete", "average"]
@@ -346,11 +347,7 @@ def optuna_test(
                 search_space={
                     "n_clusters": (
                         2,
-                        (
-                            ceil(0.1 * len(num_rows))
-                            if ceil(0.1 * len(num_rows)) < 200
-                            else 200
-                        ),
+                        (ceil(0.1 * num_rows) if ceil(0.1 * num_rows) < 200 else 200),
                     ),
                     "linkage": ["ward", "single", "complete", "average"],
                 }
@@ -365,7 +362,7 @@ def optuna_test(
         )
 
         def hierarchical_div_optuna(trial):
-            n_clusters = trial.suggest_int("n_clusters", 2, ceil(0.5 * len(num_rows)))
+            n_clusters = trial.suggest_int("n_clusters", 2, ceil(0.5 * num_rows))
 
             hieraquical_model = BisectingKMeans(n_clusters=n_clusters)
 

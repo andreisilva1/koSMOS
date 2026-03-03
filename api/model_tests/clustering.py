@@ -1,10 +1,11 @@
-from math import ceil
 
 from pandas import DataFrame
 from sklearn.cluster import KMeans
 from sklearn.metrics import silhouette_score
 import pandas as pd
 from sklearn.cluster import AgglomerativeClustering, BisectingKMeans
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.pipeline import Pipeline
 
 from model_tests.optuna import optuna_test
 from utils.dataframes import apply_pca, make_preprocessor
@@ -21,6 +22,14 @@ def test_clustering_algorithms(
     # Normalization
     X = df.copy()
     preprocessor = make_preprocessor(numericals, ordinals)
+
+    # Start KNN to predict the cluster of new items
+    knn = Pipeline(
+        steps=[
+            ("preprocessor", preprocessor),
+            ("knn", KNeighborsClassifier(n_neighbors=5)),
+        ]
+    )
 
     X_transformed = preprocessor.fit_transform(X)
     df_transformed = pd.DataFrame(
@@ -88,7 +97,7 @@ def test_clustering_algorithms(
     if cluster_method == "hierarchical":
 
         best_model, linkage, hierarchical_n_clusters, divisive_n_clusters = optuna_test(
-            algorithm="hierarchical", X_transformed=X_transformed
+            algorithm="hierarchical", X_transformed=X_transformed, num_rows=len(df)
         )
 
         if isinstance(best_model, AgglomerativeClustering):
@@ -102,8 +111,13 @@ def test_clustering_algorithms(
                 columns=["model_type", "n_clusters"],
             )
 
+    df_knn = df.copy()
+    df_knn["cluster"] = best_model.labels_
+    y = df_knn["cluster"]
+    knn.fit(X, y)
     return (
         hiperparameter_df,
+        knn,
         df_high_corr.to_csv(index=False),
         df_all_correlations.to_csv(index=False),
         best_model,
