@@ -94,24 +94,17 @@ def train_polynomial_model(X_transformed, y):
     best_degree = 1
     for degree in polynomial_degrees:
         poly_feat = PolynomialFeatures(degree=degree, include_bias=False)
-        X_train_poly, X_test_poly = poly_feat.fit_transform(
-            X_train
-        ), poly_feat.fit_transform(X_test)
 
         model = Pipeline(
             steps=[("poly_feat", poly_feat), ("regressor", LinearRegression())]
         )
 
-        model.fit(X_train_poly, y_train)
-        y_pred = model.predict(X_test_poly)
+        model.fit(X_train, y_train)
+        y_pred = model.predict(X_test)
 
         actual_r2 = r2_score(y_test, y_pred)
 
-        if not best_r2:
-            best_r2 = actual_r2
-            best_degree = degree
-
-        elif actual_r2 > best_r2:
+        if actual_r2 > best_r2:
             best_r2 = actual_r2
             best_degree = degree
 
