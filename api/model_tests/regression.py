@@ -17,7 +17,7 @@ def test_regression_algorithms(
     categoricals: list = [],
     ordinals: list = [],
 ):
-    num_cols = len(df)
+    num_cols = len(df.columns)
     num_rows = len(df)
     is_linear = check_linearity(df, target)
     X = df.copy()
@@ -45,29 +45,24 @@ def test_regression_algorithms(
 
     # Clearly linear and few columns -> LinearRegression
     if is_linear and num_cols <= 10:
-        print("LINEAR")
-        model, accuracy = train_linear_model(X_transformed, y)
+        model, stats_df = train_linear_model(X_transformed, y)
 
     # Not linear and few columns -> PolynomialRegression
     elif num_cols * 3 <= 30 and not is_linear:
-        print("POLYNOMIAL")
-        model, accuracy = train_polynomial_model(X_transformed, y)
+        model, stats_df = train_polynomial_model(X_transformed, y)
 
     # Much rows and much columns -> RandomForestRegressor
     elif num_rows > 1000 and num_cols > 10:
-        print("RANDOM FOREST")
-        model, accuracy = train_random_forest_regression_model(X_transformed, y)
+        model, stats_df = train_random_forest_regression_model(X_transformed, y)
 
     # Fallback -> GradientBoostingRegressor
     else:
-        print("GRADIENT BOOSTING")
-        model, accuracy = train_gradient_boosting_regression_model(X_transformed, y)
+        model, stats_df  = train_gradient_boosting_regression_model(X_transformed, y)
 
-    hiperparameter_df = DataFrame([[f"{accuracy:.2f}"]], columns=["accuracy"])
     return (
         model,
         preprocessor,
-        hiperparameter_df,
+        stats_df,
         df_high_correlations.to_csv(index=False),
         df_all_correlations.to_csv(index=False),
     )
@@ -82,7 +77,10 @@ def train_linear_model(X_transformed, y):
     y_pred = model.predict(X_test)
 
     accuracy = return_accuracy_regression(y_pred, y_test)
-    return model, accuracy
+    
+    stats_df = DataFrame([["linear_model", f"{accuracy:.2f}"]], columns=["model_type", "accuracy"])
+
+    return model, stats_df
 
 
 def train_polynomial_model(X_transformed, y):
@@ -115,8 +113,6 @@ def train_polynomial_model(X_transformed, y):
             best_r2 = actual_r2
             best_degree = degree
 
-    print(best_degree)
-    print(best_r2)
     poly_feat = PolynomialFeatures(degree=best_degree)
     model = Pipeline(
         steps=[("poly_feat", poly_feat), ("regressor", LinearRegression())]
@@ -126,13 +122,15 @@ def train_polynomial_model(X_transformed, y):
     y_pred = model.predict(X_test)
 
     accuracy = return_accuracy_regression(y_pred, y_test)
-    return model, accuracy
+    stats_df = DataFrame([["polynomial_model", f"{accuracy:.2f}", best_degree]], columns=["model_type", "accuracy", "degree"])
+    
+    return model, stats_df
 
 
 def train_random_forest_regression_model(X_transformed, y):
     # Generic RandomForestRegression
     model = RandomForestRegressor(
-        n_estimators=200, max_features="sqrt", random_state=51, n_jobs=-1
+        n_estimators=200, max_features="sqrt", random_state=51
     )
     X_train, X_test, y_train, y_test = train_test_split(
         X_transformed, y, test_size=0.3, random_state=51
@@ -140,7 +138,12 @@ def train_random_forest_regression_model(X_transformed, y):
     model.fit(X_train, y_train)
     y_pred = model.predict(X_test)
     accuracy = return_accuracy_regression(y_pred, y_test)
-    return model, accuracy
+    
+    stats_df = DataFrame([["random_forest_regression", f"{accuracy:.2f}"]], columns=["model_type", "accuracy"])
+    
+    return model, stats_df
+
+    
 
 
 def train_gradient_boosting_regression_model(X_transformed, y):
@@ -157,4 +160,7 @@ def train_gradient_boosting_regression_model(X_transformed, y):
     model.fit(X_train, y_train)
     y_pred = model.predict(X_test)
     accuracy = return_accuracy_regression(y_pred, y_test)
-    return model, accuracy
+    
+    stats_df = DataFrame([["gradient_boosting_regression", f"{accuracy:.2f}"]], columns=["model_type", "accuracy"])
+    
+    return model, stats_df

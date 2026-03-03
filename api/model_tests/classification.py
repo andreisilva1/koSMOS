@@ -43,6 +43,7 @@ def test_classification_algorithms(
         abs(df_all_correlations["correlation"]) >= 0.6
     ]
 
+    model = None
     len_target = df[target].nunique()
     # Few classes and is linear -> LogisticRegression
     if is_linear:
@@ -148,7 +149,7 @@ def train_decision_tree_model(X_transformed, y):
     accuracy = return_accuracy_classification(y_pred, y_test)
 
     decision_tree_hiperparameter_info_df = DataFrame(
-        [["decision_tree", accuracy, min_samples_leaf, max_depth]],
+        [["decision_tree_classifier", accuracy, min_samples_leaf, max_depth]],
         columns=["model_type", "accuracy", "min_samples_leaf", "max_depth"],
     )
     return model, decision_tree_hiperparameter_info_df
@@ -186,7 +187,7 @@ def train_gradient_boosting_classifier_model(X_transformed, y):
     gradient_boosting_hiperparameter_info_df = DataFrame(
         [
             [
-                "gradient_boosting",
+                "gradient_boosting_classifier",
                 accuracy,
                 learning_rate,
                 max_iter,
@@ -244,7 +245,7 @@ def train_random_forest_classifier_model(X_transformed, y):
     random_forest_hiperparameter_info_df = DataFrame(
         [
             [
-                "random_forest",
+                "random_forest_classifier",
                 accuracy,
                 n_estimators,
                 max_depth,
