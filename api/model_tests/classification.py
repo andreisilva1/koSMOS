@@ -12,7 +12,6 @@ from model_tests.optuna import optuna_test
 from utils.dataframes import make_preprocessor, return_accuracy_classification
 from utils.extractors import extract_correlation_pairs
 from checks.statistics import check_independence, check_linearity
-from sklearn.metrics import accuracy_score
 
 
 # Treinar modelos de LogisticRegression, NaiveBayes e DecisionTree

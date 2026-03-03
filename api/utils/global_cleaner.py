@@ -7,7 +7,6 @@ MAX_ROWS = 5000
 
 def global_cleaner(df: DataFrame, target: str = None):
     clean_df = df.copy()
-    compressed_df = DataFrame()
 
     # Create a compressed_df to use in tests: a dataframe of 5.000 rows maximum that maintains (in the best possible way) the same proportion as the original
     if len(clean_df) > MAX_ROWS:

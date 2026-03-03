@@ -4,7 +4,6 @@ from pandas import DataFrame
 from sklearn.compose import ColumnTransformer
 from sklearn.decomposition import PCA
 from sklearn.preprocessing import OneHotEncoder, OrdinalEncoder, StandardScaler
-from sklearn.metrics import accuracy_score
 from .extractors import extract_correlation_pairs
 
 

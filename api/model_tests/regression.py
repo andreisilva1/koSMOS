@@ -57,7 +57,7 @@ def test_regression_algorithms(
 
     # Fallback -> GradientBoostingRegressor
     else:
-        model, stats_df  = train_gradient_boosting_regression_model(X_transformed, y)
+        model, stats_df = train_gradient_boosting_regression_model(X_transformed, y)
 
     return (
         model,
@@ -77,8 +77,10 @@ def train_linear_model(X_transformed, y):
     y_pred = model.predict(X_test)
 
     accuracy = return_accuracy_regression(y_pred, y_test)
-    
-    stats_df = DataFrame([["linear_model", f"{accuracy:.2f}"]], columns=["model_type", "accuracy"])
+
+    stats_df = DataFrame(
+        [["linear_model", f"{accuracy:.2f}"]], columns=["model_type", "accuracy"]
+    )
 
     return model, stats_df
 
@@ -122,8 +124,11 @@ def train_polynomial_model(X_transformed, y):
     y_pred = model.predict(X_test)
 
     accuracy = return_accuracy_regression(y_pred, y_test)
-    stats_df = DataFrame([["polynomial_model", f"{accuracy:.2f}", best_degree]], columns=["model_type", "accuracy", "degree"])
-    
+    stats_df = DataFrame(
+        [["polynomial_model", f"{accuracy:.2f}", best_degree]],
+        columns=["model_type", "accuracy", "degree"],
+    )
+
     return model, stats_df
 
 
@@ -138,12 +143,13 @@ def train_random_forest_regression_model(X_transformed, y):
     model.fit(X_train, y_train)
     y_pred = model.predict(X_test)
     accuracy = return_accuracy_regression(y_pred, y_test)
-    
-    stats_df = DataFrame([["random_forest_regression", f"{accuracy:.2f}"]], columns=["model_type", "accuracy"])
-    
-    return model, stats_df
 
-    
+    stats_df = DataFrame(
+        [["random_forest_regression", f"{accuracy:.2f}"]],
+        columns=["model_type", "accuracy"],
+    )
+
+    return model, stats_df
 
 
 def train_gradient_boosting_regression_model(X_transformed, y):
@@ -160,7 +166,10 @@ def train_gradient_boosting_regression_model(X_transformed, y):
     model.fit(X_train, y_train)
     y_pred = model.predict(X_test)
     accuracy = return_accuracy_regression(y_pred, y_test)
-    
-    stats_df = DataFrame([["gradient_boosting_regression", f"{accuracy:.2f}"]], columns=["model_type", "accuracy"])
-    
+
+    stats_df = DataFrame(
+        [["gradient_boosting_regression", f"{accuracy:.2f}"]],
+        columns=["model_type", "accuracy"],
+    )
+
     return model, stats_df
