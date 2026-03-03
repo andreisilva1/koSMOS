@@ -159,11 +159,12 @@ async def test_models(
     valid_dict_types = {}
     any_str_columns = []
     for key, value in dict_types.items():
-        if value["values"] == "any" and value["col_type"] == "str": # Remove values any-string from model testing
+        if (
+            value["values"] == "any" and value["col_type"] == "str"
+        ):  # Remove values any-string from model testing
             any_str_columns.append(key)
         else:
             valid_dict_types[key] = value
-
 
     numericals, categoricals, ordinals = extract_numericals_categoricals_and_ordinals(
         valid_dict_types
@@ -172,21 +173,23 @@ async def test_models(
     if any_str_columns:
         if len(compressed_df) > 0:
             compressed_df.drop(
-            columns=[col for col in any_str_columns if col in compressed_df.columns], inplace=True
-        )
+                columns=[
+                    col for col in any_str_columns if col in compressed_df.columns
+                ],
+                inplace=True,
+            )
         clean_df.drop(
-            columns=[col for col in any_str_columns if col in clean_df.columns], inplace=True
+            columns=[col for col in any_str_columns if col in clean_df.columns],
+            inplace=True,
         )
-    
+
     if len(compressed_df) > 0:
-        compressed_df = pd.get_dummies(
-        compressed_df, columns=categoricals, dtype=int
-    )
-        
+        compressed_df = pd.get_dummies(compressed_df, columns=categoricals, dtype=int)
+
     clean_df_with_converted_categoricals_to_dummies = pd.get_dummies(
         clean_df, columns=categoricals, dtype=int
     )
-        
+
     if target:
         check_dict_values(dict_types, dict_values)
         # Check if target is numeric or categoric
@@ -267,15 +270,14 @@ async def test_models(
             pp,
         ) = test_clustering_algorithms(
             cluster_method=cluster_method,
-                            compressed_df=compressed_df,
-
+            compressed_df=compressed_df,
             df=clean_df_with_converted_categoricals_to_dummies,
             n_groups=n_groups,
             numericals=numericals,
             ordinals=ordinals,
         )
         X_transformed = pp.fit_transform(df)
-        
+
         ml_model = pickle.dumps(best_model)
         preprocessor = pickle.dumps(pp)
 

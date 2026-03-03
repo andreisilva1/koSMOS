@@ -47,7 +47,7 @@ def optuna_test(
 
             return roc_auc_optuna, log_loss_optuna, f1_score_optuna
 
-        search_space = {"penalty": {"l1", "l2"}, "c_values": [100, 10, 1, 0.1, 0.01]}
+        search_space = {"penalty": ["l1", "l2"], "c_values": [100, 10, 1, 0.1, 0.01]}
         logistic_study = optuna.create_study(
             sampler=optuna.samplers.GridSampler(search_space=search_space),
             directions=["maximize", "minimize", "maximize"],
@@ -75,7 +75,7 @@ def optuna_test(
 
             return recall
 
-        naive_bayes_seach_space = {"k": [n for n in range(1, num_cols + 1)]}
+        naive_bayes_seach_space = {"k": (1, num_cols)}
         naive_bayes_study = optuna.create_study(
             sampler=optuna.samplers.GridSampler(search_space=naive_bayes_seach_space),
             directions=["maximize"],
@@ -113,12 +113,12 @@ def optuna_test(
     if algorithm == "random_forest":
 
         def random_forest_optuna(trial):
-            n_estimators = (trial.suggest_int("n_estimators", 50, 500),)
-            max_depth = (trial.suggest_int("max_depth", 3, 30),)
-            min_samples_split = (trial.suggest_int("min_samples_split", 2, 20),)
-            min_samples_leaf = (trial.suggest_int("min_samples_leaf", 1, 20),)
-            max_features = (
-                trial.suggest_categorical("max_features", ["sqrt", "log2", None]),
+            n_estimators = trial.suggest_int("n_estimators", 50, 500)
+            max_depth = trial.suggest_int("max_depth", 3, 30)
+            min_samples_split = trial.suggest_int("min_samples_split", 2, 20)
+            min_samples_leaf = trial.suggest_int("min_samples_leaf", 1, 20)
+            max_features = trial.suggest_categorical(
+                "max_features", ["sqrt", "log2", None]
             )
             bootstrap = trial.suggest_categorical("bootstrap", [True, False])
 

@@ -17,10 +17,14 @@ def test_clustering_algorithms(
     numericals: list,
     ordinals: list,
     n_groups: int = None,
-    compressed_df: DataFrame = None
+    compressed_df: DataFrame = None,
 ):
     # Normalization
-    X = compressed_df.copy() if len(compressed_df) is not None and len(compressed_df) > 0 else df.copy()
+    X = (
+        compressed_df.copy()
+        if len(compressed_df) is not None and len(compressed_df) > 0
+        else df.copy()
+    )
     preprocessor = make_preprocessor(numericals, ordinals)
 
     X_transformed = preprocessor.fit_transform(X)
@@ -116,9 +120,12 @@ def test_clustering_algorithms(
         )
 
     if cluster_method == "hierarquical":
+
         def hierarquical_agg_optuna(trial):
             n_clusters = trial.suggest_int(
-                "n_clusters", 2, ceil(0.1 * len(df)) if ceil(0.1 * len(df)) < 200 else 200
+                "n_clusters",
+                2,
+                ceil(0.1 * len(df)) if ceil(0.1 * len(df)) < 200 else 200,
             )  # 2 cluster min, half the df size max (so, in the worst case, we will have x clusters with 2 items each
             linkage = trial.suggest_categorical(
                 "linkage", ["ward", "single", "complete", "average"]
@@ -137,7 +144,12 @@ def test_clustering_algorithms(
         hierarquical_agg_study = optuna.create_study(
             sampler=optuna.samplers.GridSampler(
                 search_space={
-                    "n_clusters": [n for n in range(2, ceil(0.1 * len(df)) if ceil(0.1 * len(df)) < 200 else 200)],
+                    "n_clusters": [
+                        n
+                        for n in range(
+                            2, ceil(0.1 * len(df)) if ceil(0.1 * len(df)) < 200 else 200
+                        )
+                    ],
                     "linkage": ["ward", "single", "complete", "average"],
                 }
             ),
