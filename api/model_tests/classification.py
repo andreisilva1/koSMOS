@@ -44,7 +44,7 @@ def test_classification_algorithms(
 
     model = None
     len_target = df[target].nunique()
-    # Few classes and is linear -> LogisticRegression
+    # Few classes and it's linear -> LogisticRegression
     if is_linear:
         if len_target < 10:
             model, hiperparameter_df = train_logistic_model(X_transformed, y)
@@ -82,7 +82,9 @@ def test_classification_algorithms(
 
 
 def train_logistic_model(X_transformed, y):
-    penalty, c_values = optuna_test("logistic", X_transformed, y)
+    penalty, c_values = optuna_test(
+        algorithm="logistic", X_transformed=X_transformed, y=y
+    )
     model = LogisticRegression(penalty=penalty, C=c_values)
     X_train, X_test, y_train, y_test = train_test_split(
         X_transformed, y, test_size=0.3, random_state=51, shuffle=True
@@ -101,7 +103,9 @@ def train_logistic_model(X_transformed, y):
 
 
 def train_naive_model(num_cols, X_transformed, y):
-    k = optuna_test("naive", X_transformed, y, num_cols=num_cols)
+    k = optuna_test(
+        algorithm="naive", X_transformed=X_transformed, y=y, num_cols=num_cols
+    )
 
     model = GaussianNB()
 
@@ -133,7 +137,9 @@ def train_naive_model(num_cols, X_transformed, y):
 
 def train_decision_tree_model(X_transformed, y):
     # Hiperparameter tuning
-    min_samples_leaf, max_depth = optuna_test("decision_tree", X_transformed, y)
+    min_samples_leaf, max_depth = optuna_test(
+        algorithm="decision_tree", X_transformed=X_transformed, y=y
+    )
 
     model = DecisionTreeClassifier(
         min_samples_leaf=min_samples_leaf, max_depth=max_depth
@@ -164,7 +170,9 @@ def train_gradient_boosting_classifier_model(X_transformed, y):
         max_leaf_nodes,
         l2_regularization,
         max_bins,
-    ) = optuna_test("gradient", X_transformed, y, classifier=True)
+    ) = optuna_test(
+        algorithm="gradient", X_transformed=X_transformed, y=y, classifier=True
+    )
     model = HistGradientBoostingClassifier(
         learning_rate=learning_rate,
         max_iter=max_iter,
@@ -221,7 +229,9 @@ def train_random_forest_classifier_model(X_transformed, y):
         min_samples_leaf,
         max_features,
         bootstrap,
-    ) = optuna_test("random_forest", X_transformed, y, classifier=True)
+    ) = optuna_test(
+        algorithm="random_forest", X_transformed=X_transformed, y=y, classifier=True
+    )
 
     model = RandomForestClassifier(
         n_estimators=n_estimators,

@@ -242,8 +242,8 @@ async def test_models(
         output.seek(0)
     if not target:
         if not n_groups:
-            # No target AND n_groups? Hierarquical cluster.
-            cluster_method = "hierarquical"
+            # No target AND n_groups? hierarchical cluster.
+            cluster_method = "hierarchical"
         else:
             # No target WITH n_groups? K-means.
             cluster_method = "k-means"

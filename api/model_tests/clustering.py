@@ -1,12 +1,12 @@
 from math import ceil
 
-import optuna
 from pandas import DataFrame
 from sklearn.cluster import KMeans
 from sklearn.metrics import silhouette_score
 import pandas as pd
 from sklearn.cluster import AgglomerativeClustering, BisectingKMeans
 
+from model_tests.optuna import optuna_test
 from utils.dataframes import apply_pca, make_preprocessor
 from checks.statistics import check_collinearity
 
@@ -45,42 +45,13 @@ def test_clustering_algorithms(
         if (
             n_components and n_components * n_groups > 50
         ):  # Apparently is a good complexity scenario to start use optuna.
-
-            def kmeans_optuna(trial):
-                n_clusters = trial.suggest_int("n_clusters", 2, n_groups)
-                max_iter = trial.suggest_int("max_iter", 200, 500)
-                n_init = trial.suggest_int("n_init", 10, 30)
-                model_kmeans = KMeans(
-                    n_clusters=n_clusters, max_iter=max_iter, n_init=n_init
-                )
-
-                # if it is collinear, it will use X_pca, which overwrites X_transformed; if it is not collinear, it uses the normal X_transformed.
-                labels = model_kmeans.fit_predict(X_transformed)
-                sillhouette_avg = silhouette_score(X_transformed, labels=labels)
-
-                return sillhouette_avg
-
-            kmeans_study = optuna.create_study(
-                sampler=optuna.samplers.GridSampler(
-                    search_space={
-                        "n_clusters": [n for n in range(2, n_groups + 1)],
-                        "max_iter": [n for n in range(200, 501)],
-                        "n_init": [n for n in range(10, 31)],
-                    }
-                ),
-                direction="maximize",
-            )
-            kmeans_study.optimize(kmeans_optuna, n_trials=20)
-            bp = kmeans_study.best_params
-            best_n_clusters, best_max_iter, best_n_init = (
-                bp["n_clusters"],
-                bp["max_iter"],
-                bp["n_init"],
+            best_n_clusters, best_max_iter, best_n_init = optuna_test(
+                algorithm="k-means", X_transformed=X_transformed, n_groups=n_groups
             )
             best_model = KMeans(
-                n_clusters=bp["n_clusters"],
-                max_iter=bp["max_iter"],
-                n_init=bp["n_init"],
+                n_clusters=best_n_clusters,
+                max_iter=best_max_iter,
+                n_init=best_n_init,
             )
 
             best_model.fit(X_transformed)
@@ -114,85 +85,15 @@ def test_clustering_algorithms(
             columns=["model_type", "n_init", "max_iter", "n_clusters"],
         )
 
-    if cluster_method == "hierarquical":
+    if cluster_method == "hierarchical":
 
-        def hierarquical_agg_optuna(trial):
-            n_clusters = trial.suggest_int(
-                "n_clusters",
-                2,
-                ceil(0.1 * len(df)) if ceil(0.1 * len(df)) < 200 else 200,
-            )  # 2 cluster min, half the df size max (so, in the worst case, we will have x clusters with 2 items each
-            linkage = trial.suggest_categorical(
-                "linkage", ["ward", "single", "complete", "average"]
-            )
-
-            model_hierarquical = AgglomerativeClustering(
-                n_clusters=n_clusters, linkage=linkage
-            )
-
-            # if it is collinear, it will use X_pca, which overwrites X_transformed; if it is not collinear, it uses the normal X_transformed.
-            labels = model_hierarquical.fit_predict(X_transformed)
-            sillhouette_avg = silhouette_score(X_transformed, labels=labels)
-
-            return sillhouette_avg
-
-        hierarquical_agg_study = optuna.create_study(
-            sampler=optuna.samplers.GridSampler(
-                search_space={
-                    "n_clusters": [
-                        n
-                        for n in range(
-                            2, ceil(0.1 * len(df)) if ceil(0.1 * len(df)) < 200 else 200
-                        )
-                    ],
-                    "linkage": ["ward", "single", "complete", "average"],
-                }
-            ),
-            direction="maximize",
-        )
-        hierarquical_agg_study.optimize(hierarquical_agg_optuna, n_trials=20)
-        bp_agg = hierarquical_agg_study.best_params
-        linkage, hierarquical_n_clusters = bp_agg["linkage"], bp_agg["n_clusters"]
-
-        def hierarquical_div_optuna(trial):
-            n_clusters = trial.suggest_int("n_clusters", 2, ceil(0.5 * len(df)))
-
-            hieraquical_model = BisectingKMeans(n_clusters=n_clusters)
-
-            labels = hieraquical_model.fit_predict(X_transformed)
-
-            silhouette_avg = silhouette_score(X_transformed, labels=labels)
-
-            return silhouette_avg
-
-        search_space = {"n_clusters": [n for n in range(1, 151)]}
-        hierarquical_div_study = optuna.create_study(
-            sampler=optuna.samplers.GridSampler(search_space=search_space),
-            direction="maximize",
-        )
-        hierarquical_div_study.optimize(hierarquical_div_optuna, n_trials=20)
-
-        bp_div = hierarquical_div_study.best_params
-        divisive_n_clusters = bp_div["n_clusters"]
-
-        # Checks which hierarquical model has the best sillhouette_score
-        agg_model = AgglomerativeClustering(
-            n_clusters=bp_agg["n_clusters"], linkage=bp_agg["linkage"]
-        )
-        agg_labels = agg_model.fit_predict(X_transformed)
-
-        div_model = BisectingKMeans(n_clusters=bp_div["n_clusters"])
-        div_labels = div_model.fit_predict(X_transformed)
-
-        agg_best_sillhouette = silhouette_score(X_transformed, labels=agg_labels)
-        div_best_sillhouette = silhouette_score(X_transformed, labels=div_labels)
-        best_model = (
-            agg_model if agg_best_sillhouette >= div_best_sillhouette else div_model
+        best_model, linkage, hierarchical_n_clusters, divisive_n_clusters = optuna_test(
+            algorithm="hierarchical", X_transformed=X_transformed
         )
 
         if isinstance(best_model, AgglomerativeClustering):
             hiperparameter_df = DataFrame(
-                [["aggregative_clustering", linkage, hierarquical_n_clusters]],
+                [["agglomerative_clustering", linkage, hierarchical_n_clusters]],
                 columns=["model_type", "linkage", "n_clusters"],
             )
         if isinstance(best_model, BisectingKMeans):

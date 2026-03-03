@@ -1,4 +1,7 @@
+from math import ceil
+
 import optuna
+from sklearn.cluster import AgglomerativeClustering, BisectingKMeans, KMeans
 from sklearn.ensemble import (
     HistGradientBoostingClassifier,
     HistGradientBoostingRegressor,
@@ -7,7 +10,14 @@ from sklearn.ensemble import (
 )
 from sklearn.feature_selection import SelectKBest, f_classif
 from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import auc, f1_score, log_loss, recall_score, roc_curve
+from sklearn.metrics import (
+    auc,
+    f1_score,
+    log_loss,
+    recall_score,
+    roc_curve,
+    silhouette_score,
+)
 from sklearn.model_selection import StratifiedKFold, cross_val_score, train_test_split
 from sklearn.naive_bayes import GaussianNB
 from sklearn.tree import DecisionTreeClassifier
@@ -17,8 +27,10 @@ from sklearn.metrics import r2_score
 def optuna_test(
     algorithm,
     X_transformed,
-    y,
+    y=None,
+    n_groups: int = None,
     num_cols: int = None,
+    num_rows: int = None,
     classifier: bool = False,
     n_trials: int = 20,
 ):
@@ -190,82 +202,204 @@ def optuna_test(
             bootstrap,
         )
 
-    def gradient_boosting_optuna(trial):
-        learning_rate = trial.suggest_float("learning_rate", 0.01, 0.3)
-        max_iter = trial.suggest_int("max_iter", 50, 500)
-        max_depth = trial.suggest_int("max_depth", 3, 20)
-        min_samples_leaf = trial.suggest_int("min_samples_leaf", 1, 20)
-        max_leaf_nodes = trial.suggest_int("max_leaf_nodes", 10, 100)
-        l2_regularization = trial.suggest_float("l2_regularization", 0, 1.0)
-        max_bins = trial.suggest_int("max_bins", 100, 255)
+    if algorithm == "gradient":
 
-        if classifier:
-            hist_gradient_model = HistGradientBoostingClassifier(
-                learning_rate=learning_rate,
-                max_iter=max_iter,
-                max_depth=max_depth,
-                min_samples_leaf=min_samples_leaf,
-                max_leaf_nodes=max_leaf_nodes,
-                l2_regularization=l2_regularization,
-                max_bins=max_bins,
+        def gradient_boosting_optuna(trial):
+            learning_rate = trial.suggest_float("learning_rate", 0.01, 0.3)
+            max_iter = trial.suggest_int("max_iter", 50, 500)
+            max_depth = trial.suggest_int("max_depth", 3, 20)
+            min_samples_leaf = trial.suggest_int("min_samples_leaf", 1, 20)
+            max_leaf_nodes = trial.suggest_int("max_leaf_nodes", 10, 100)
+            l2_regularization = trial.suggest_float("l2_regularization", 0, 1.0)
+            max_bins = trial.suggest_int("max_bins", 100, 255)
+
+            if classifier:
+                hist_gradient_model = HistGradientBoostingClassifier(
+                    learning_rate=learning_rate,
+                    max_iter=max_iter,
+                    max_depth=max_depth,
+                    min_samples_leaf=min_samples_leaf,
+                    max_leaf_nodes=max_leaf_nodes,
+                    l2_regularization=l2_regularization,
+                    max_bins=max_bins,
+                )
+            else:
+                hist_gradient_model = HistGradientBoostingRegressor(
+                    learning_rate=learning_rate,
+                    max_iter=max_iter,
+                    max_depth=max_depth,
+                    min_samples_leaf=min_samples_leaf,
+                    max_leaf_nodes=max_leaf_nodes,
+                    l2_regularization=l2_regularization,
+                    max_bins=max_bins,
+                )
+
+            hist_gradient_model.fit(X_train, y_train)
+            y_pred = hist_gradient_model.predict(X_test)
+
+            r2 = r2_score(y_test, y_pred)
+            return r2
+
+        hist_gb_search_space = {
+            "learning_rate": (0.01, 0.3),
+            "max_iter": (50, 500),
+            "max_depth": (3, 20),
+            "min_samples_leaf": (1, 20),
+            "max_leaf_nodes": (10, 100),
+            "l2_regularization": [0.0, 0.01, 0.1, 1.0],
+            "max_bins": (100, 255),
+        }
+
+        gradient_boosting_study = optuna.create_study(
+            sampler=optuna.samplers.GridSampler(search_space=hist_gb_search_space),
+            direction="maximize",
+        )
+        gradient_boosting_study.optimize(gradient_boosting_optuna, n_trials=n_trials)
+
+        (
+            learning_rate,
+            max_iter,
+            max_depth,
+            min_samples_leaf,
+            max_leaf_nodes,
+            l2_regularization,
+            max_bins,
+        ) = (
+            gradient_boosting_study.best_params["learning_rate"],
+            gradient_boosting_study.best_params["max_iter"],
+            gradient_boosting_study.best_params["max_depth"],
+            gradient_boosting_study.best_params["min_samples_leaf"],
+            gradient_boosting_study.best_params["max_leaf_nodes"],
+            gradient_boosting_study.best_params["l2_regularization"],
+            gradient_boosting_study.best_params["max_bins"],
+        )
+
+        return (
+            learning_rate,
+            max_iter,
+            max_depth,
+            min_samples_leaf,
+            max_leaf_nodes,
+            l2_regularization,
+            max_bins,
+        )
+
+    if algorithm == "kmeans":
+
+        def kmeans_optuna(trial):
+            n_clusters = trial.suggest_int("n_clusters", 2, n_groups)
+            max_iter = trial.suggest_int("max_iter", 200, 500)
+            n_init = trial.suggest_int("n_init", 10, 30)
+            model_kmeans = KMeans(
+                n_clusters=n_clusters, max_iter=max_iter, n_init=n_init
             )
-        else:
-            hist_gradient_model = HistGradientBoostingRegressor(
-                learning_rate=learning_rate,
-                max_iter=max_iter,
-                max_depth=max_depth,
-                min_samples_leaf=min_samples_leaf,
-                max_leaf_nodes=max_leaf_nodes,
-                l2_regularization=l2_regularization,
-                max_bins=max_bins,
+
+            # if it is collinear, it will use X_pca, which overwrites X_transformed; if it is not collinear, it uses the normal X_transformed.
+            labels = model_kmeans.fit_predict(X_transformed)
+            sillhouette_avg = silhouette_score(X_transformed, labels=labels)
+
+            return sillhouette_avg
+
+        kmeans_study = optuna.create_study(
+            sampler=optuna.samplers.GridSampler(
+                search_space={
+                    "n_clusters": (2, n_groups),
+                    "max_iter": (200, 500),
+                    "n_init": (10, 30),
+                }
+            ),
+            direction="maximize",
+        )
+        kmeans_study.optimize(kmeans_optuna, n_trials=20)
+        kmeans_best_params = kmeans_study.best_params
+
+        return (
+            kmeans_best_params["n_clusters"],
+            kmeans_best_params["max_iter"],
+            kmeans_best_params["n_init"],
+        )
+
+    if algorithm == "hierarchical":
+
+        def hierarchical_agg_optuna(trial):
+            n_clusters = trial.suggest_int(
+                "n_clusters",
+                2,
+                ceil(0.1 * len(num_rows)) if ceil(0.1 * len(num_rows)) < 200 else 200,
+            )  # 2 cluster min, 200 clusters max
+            linkage = trial.suggest_categorical(
+                "linkage", ["ward", "single", "complete", "average"]
             )
 
-        hist_gradient_model.fit(X_train, y_train)
-        y_pred = hist_gradient_model.predict(X_test)
+            model_hierarchical = AgglomerativeClustering(
+                n_clusters=n_clusters, linkage=linkage
+            )
 
-        r2 = r2_score(y_test, y_pred)
-        return r2
+            # if it is collinear, it will use X_pca, which overwrites X_transformed; if it is not collinear, it uses the normal X_transformed.
+            labels = model_hierarchical.fit_predict(X_transformed)
+            sillhouette_avg = silhouette_score(X_transformed, labels=labels)
 
-    hist_gb_search_space = {
-        "learning_rate": (0.01, 0.3),
-        "max_iter": (50, 500),
-        "max_depth": (3, 20),
-        "min_samples_leaf": (1, 20),
-        "max_leaf_nodes": (10, 100),
-        "l2_regularization": [0.0, 0.01, 0.1, 1.0],
-        "max_bins": (100, 255),
-    }
+            return sillhouette_avg
 
-    gradient_boosting_study = optuna.create_study(
-        sampler=optuna.samplers.GridSampler(search_space=hist_gb_search_space),
-        direction="maximize",
-    )
-    gradient_boosting_study.optimize(gradient_boosting_optuna, n_trials=n_trials)
+        hierarchical_agg_study = optuna.create_study(
+            sampler=optuna.samplers.GridSampler(
+                search_space={
+                    "n_clusters": (
+                        2,
+                        (
+                            ceil(0.1 * len(num_rows))
+                            if ceil(0.1 * len(num_rows)) < 200
+                            else 200
+                        ),
+                    ),
+                    "linkage": ["ward", "single", "complete", "average"],
+                }
+            ),
+            direction="maximize",
+        )
+        hierarchical_agg_study.optimize(hierarchical_agg_optuna, n_trials=20)
+        best_params_agglomerative_clustering = hierarchical_agg_study.best_params
+        linkage, hierarchical_n_clusters = (
+            best_params_agglomerative_clustering["linkage"],
+            best_params_agglomerative_clustering["n_clusters"],
+        )
 
-    (
-        learning_rate,
-        max_iter,
-        max_depth,
-        min_samples_leaf,
-        max_leaf_nodes,
-        l2_regularization,
-        max_bins,
-    ) = (
-        gradient_boosting_study.best_params["learning_rate"],
-        gradient_boosting_study.best_params["max_iter"],
-        gradient_boosting_study.best_params["max_depth"],
-        gradient_boosting_study.best_params["min_samples_leaf"],
-        gradient_boosting_study.best_params["max_leaf_nodes"],
-        gradient_boosting_study.best_params["l2_regularization"],
-        gradient_boosting_study.best_params["max_bins"],
-    )
+        def hierarchical_div_optuna(trial):
+            n_clusters = trial.suggest_int("n_clusters", 2, ceil(0.5 * len(num_rows)))
 
-    return (
-        learning_rate,
-        max_iter,
-        max_depth,
-        min_samples_leaf,
-        max_leaf_nodes,
-        l2_regularization,
-        max_bins,
-    )
+            hieraquical_model = BisectingKMeans(n_clusters=n_clusters)
+
+            labels = hieraquical_model.fit_predict(X_transformed)
+
+            silhouette_avg = silhouette_score(X_transformed, labels=labels)
+
+            return silhouette_avg
+
+        search_space = {"n_clusters": [n for n in range(1, 151)]}
+        hierarchical_div_study = optuna.create_study(
+            sampler=optuna.samplers.GridSampler(search_space=search_space),
+            direction="maximize",
+        )
+        hierarchical_div_study.optimize(hierarchical_div_optuna, n_trials=20)
+
+        best_params_divisive_clustering = hierarchical_div_study.best_params
+        divisive_n_clusters = best_params_divisive_clustering["n_clusters"]
+
+        # Checks which hierarchical model has the best sillhouette_score
+        agg_model = AgglomerativeClustering(
+            n_clusters=best_params_agglomerative_clustering["n_clusters"],
+            linkage=best_params_agglomerative_clustering["linkage"],
+        )
+        agg_labels = agg_model.fit_predict(X_transformed)
+
+        div_model = BisectingKMeans(
+            n_clusters=best_params_divisive_clustering["n_clusters"]
+        )
+        div_labels = div_model.fit_predict(X_transformed)
+
+        agg_best_sillhouette = silhouette_score(X_transformed, labels=agg_labels)
+        div_best_sillhouette = silhouette_score(X_transformed, labels=div_labels)
+        best_model = (
+            agg_model if agg_best_sillhouette >= div_best_sillhouette else div_model
+        )
+        return best_model, linkage, hierarchical_n_clusters, divisive_n_clusters
