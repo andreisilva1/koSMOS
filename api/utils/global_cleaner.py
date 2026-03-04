@@ -14,7 +14,7 @@ def global_cleaner(df: DataFrame, target: str = None):
         "removed_by_null_target": [],
         "removed_by_constant_value": [],
         "removed_by_many_missing_values": [],
-        "probably_unique_values_columns" : []
+        "probably_unique_values_columns": [],
     }
     probably_unique_values_columns = []
     for column in clean_df.columns:
@@ -109,7 +109,6 @@ def global_cleaner(df: DataFrame, target: str = None):
 
     if much_missing_values_columns:
         clean_df.drop(columns=much_missing_values_columns, inplace=True)
-
 
     not_null_changed_columns = {}
     for key, value in changed_columns.items():

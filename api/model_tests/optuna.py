@@ -49,7 +49,12 @@ def optuna_test(
             penalty = trial.suggest_categorical("penalty", ["l1", "l2"])
             c_values = trial.suggest_categorical("c_values", [100, 10, 1, 0.1, 0.01])
 
-            logistic_model = Pipeline(steps=[("preprocessor", preprocessor), ("logistic_model", LogisticRegression(penalty=penalty, C=c_values))])
+            logistic_model = Pipeline(
+                steps=[
+                    ("preprocessor", preprocessor),
+                    ("logistic_model", LogisticRegression(penalty=penalty, C=c_values)),
+                ]
+            )
             logistic_model.fit(X_train, y_train)
 
             y_decision_optuna = logistic_model.decision_function(X_test)
@@ -81,10 +86,16 @@ def optuna_test(
             k = trial.suggest_int("k", 1, num_cols + 1)
 
             kbest = SelectKBest(score_func=f_classif, k=k)
-            naive_model = Pipeline(steps=[("preprocessor", preprocessor), ("feature_selection", kbest), ("naive_bayes", GaussianNB())])
-            
+            naive_model = Pipeline(
+                steps=[
+                    ("preprocessor", preprocessor),
+                    ("feature_selection", kbest),
+                    ("naive_bayes", GaussianNB()),
+                ]
+            )
+
             naive_model.fit(X_train, y_train)
-        
+
             y_pred = naive_model.predict(X_test)
 
             recall = recall_score(y_test, y_pred, average="macro")
@@ -107,11 +118,19 @@ def optuna_test(
             max_depth = trial.suggest_int("max_depth", 2, 8)
 
             cv_folds = StratifiedKFold(n_splits=5, shuffle=True, random_state=51)
-            decision_tree_model = Pipeline(steps=[("preprocessor", preprocessor), ("k-fold", cv_folds), ("decision_tree", DecisionTreeClassifier(
-                min_samples_leaf=min_samples_leaf, max_depth=max_depth)
-            )])
+            decision_tree_model = Pipeline(
+                steps=[
+                    ("preprocessor", preprocessor),
+                    ("k-fold", cv_folds),
+                    (
+                        "decision_tree",
+                        DecisionTreeClassifier(
+                            min_samples_leaf=min_samples_leaf, max_depth=max_depth
+                        ),
+                    ),
+                ]
+            )
 
-            
             scores = cross_val_score(
                 decision_tree_model, X, y, cv=cv_folds, scoring="accuracy"
             )
@@ -156,8 +175,10 @@ def optuna_test(
                     max_features=max_features,
                     bootstrap=bootstrap,
                 )
-                
-            random_forest_model = Pipeline(steps=[("preprocessor") ,("random_forest", random_forest)])
+
+            random_forest_model = Pipeline(
+                steps=[("preprocessor"), ("random_forest", random_forest)]
+            )
 
             random_forest_model.fit(X_train, y_train)
             y_pred = random_forest_model.predict(X_test)
@@ -240,7 +261,12 @@ def optuna_test(
                     max_bins=max_bins,
                 )
 
-            hist_gradient_model = Pipeline(steps=[("preprocessor", preprocessor), ("gradient_boosting", hist_gradient)])
+            hist_gradient_model = Pipeline(
+                steps=[
+                    ("preprocessor", preprocessor),
+                    ("gradient_boosting", hist_gradient),
+                ]
+            )
             hist_gradient_model.fit(X_train, y_train)
             y_pred = hist_gradient_model.predict(X_test)
 
@@ -297,9 +323,15 @@ def optuna_test(
             n_clusters = trial.suggest_int("n_clusters", 2, n_groups)
             max_iter = trial.suggest_int("max_iter", 200, 500)
             n_init = trial.suggest_int("n_init", 10, 30)
-            model_kmeans = Pipeline(steps=[("preprocessor", preprocessor), ("kmeans", KMeans(
-                n_clusters=n_clusters, max_iter=max_iter, n_init=n_init))
-            ])
+            model_kmeans = Pipeline(
+                steps=[
+                    ("preprocessor", preprocessor),
+                    (
+                        "kmeans",
+                        KMeans(n_clusters=n_clusters, max_iter=max_iter, n_init=n_init),
+                    ),
+                ]
+            )
 
             # if it is collinear, it will use X_pca, which overwrites X_transformed; if it is not collinear, it uses the normal X_transformed.
             labels = model_kmeans.fit_predict(X)
@@ -338,8 +370,14 @@ def optuna_test(
                 "linkage", ["ward", "single", "complete", "average"]
             )
 
-            model_hierarchical = Pipeline(steps=[("preprocessor", preprocessor), ("agglomerative", AgglomerativeClustering(
-                n_clusters=n_clusters, linkage=linkage))]
+            model_hierarchical = Pipeline(
+                steps=[
+                    ("preprocessor", preprocessor),
+                    (
+                        "agglomerative",
+                        AgglomerativeClustering(n_clusters=n_clusters, linkage=linkage),
+                    ),
+                ]
             )
 
             # if it is collinear, it will use X_pca, which overwrites X_transformed; if it is not collinear, it uses the normal X_transformed.
@@ -370,7 +408,12 @@ def optuna_test(
         def hierarchical_div_optuna(trial):
             n_clusters = trial.suggest_int("n_clusters", 2, ceil(0.5 * num_rows))
 
-            hieraquical_model = Pipeline(steps=[("preprocessor", preprocessor), ("divisive", BisectingKMeans(n_clusters=n_clusters))])
+            hieraquical_model = Pipeline(
+                steps=[
+                    ("preprocessor", preprocessor),
+                    ("divisive", BisectingKMeans(n_clusters=n_clusters)),
+                ]
+            )
 
             labels = hieraquical_model.fit_predict(X)
 

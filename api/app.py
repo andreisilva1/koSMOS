@@ -115,7 +115,7 @@ async def analyze(
 async def test_models(
     dataset_file: UploadFile,
     dict_types: str = Form(),
-    dict_values: str = Form(),
+    categoricals: str = Form(None),
     id_columns: str = Form(None),
     target: str = Form(None),
     target_type: str = Form(None),
@@ -125,13 +125,24 @@ async def test_models(
 ):
     contents = await dataset_file.read()
 
-    dict_types, dict_values = json.loads(dict_types), json.loads(dict_values)
+    dict_types = json.loads(dict_types)
 
     file_extension = Path(dataset_file.filename).suffix.lower()
 
     df = convert_to_df(
         BytesIO(contents), file_extension, sheet_name=sheet_name, sep=separator
     )
+
+    categoricals_raw = json.loads(categoricals) if categoricals else None
+    categoricals = categoricals_raw
+    if categoricals_raw:
+        for cat in categoricals_raw:
+            if df[cat].nunique() > 200:
+                df.drop(columns=cat, inplace=True)
+                del dict_types[cat]
+            else:
+                categoricals[cat] = categoricals_raw[cat]
+                dict_types[cat]["values"] = df[cat].unique().tolist()
 
     if id_columns:
         df.drop(columns=[column for column in json.loads(id_columns)], inplace=True)
@@ -140,9 +151,10 @@ async def test_models(
 
     valid_dict_types = {}
     any_str_columns = []
+
     for key, value in dict_types.items():
         if (
-            value["values"] == "any" and value["col_type"] == "str"
+            dict_types[key]["values"] == "any" and dict_types[key]["col_type"] == "str"
         ):  # Remove values any-string from model testing
             any_str_columns.append(key)
         else:
@@ -159,10 +171,12 @@ async def test_models(
         )
 
     if target:
-        check_dict_values(dict_types, dict_values)
         # Check if target is numeric or categoric
 
-        if pd.api.types.is_numeric_dtype(df[target]) and target_type == "numerical":
+        if (
+            pd.api.types.is_numeric_dtype(clean_df[target])
+            and target_type == "numerical"
+        ):
             (
                 best_model,
                 pp,
@@ -177,7 +191,7 @@ async def test_models(
                 ordinals=ordinals,
             )
 
-        else:
+        elif target_type == "categorical":
             (
                 best_model,
                 pp,
@@ -194,26 +208,12 @@ async def test_models(
         ml_model = pickle.dumps(best_model)
         preprocessor_pkl = pickle.dumps(pp)
 
-        X = df.drop(columns=target)
-        y = df[target]
-
-        best_model.fit(X, y)
-        prediction_df = DataFrame([dict_values], columns=X.columns)
-
-        valid_keys = {}
-        for key, value in dict_values.items():
-            if key in clean_df.columns:
-                valid_keys[key] = value
-        y_predict = best_model.predict(DataFrame([dict_values]))
-        prediction_df[target] = y_predict
-
         # Put the final dataset, the high correlation, the all correlation dataset and the model itself in a zip
         output = BytesIO()
 
         with zipfile.ZipFile(output, "w") as z:
             if changed_columns is not None:
                 z.writestr("changed_columns.csv", changed_columns.to_csv(index=False))
-            z.writestr("prediction.csv", prediction_df.to_csv(index=False)),
             z.writestr("stats_df.csv", stats_df.to_csv(index=False)),
             z.writestr("high_correlations.csv", csv_high_correlations)
             z.writestr("all_correlations.csv", csv_all_correlations)

@@ -31,7 +31,11 @@ def make_preprocessor(
         list_transformers.append(("scaler", StandardScaler(), numericals))
     if len(categoricals) > 0:
         list_transformers.append(
-            ("cat", OneHotEncoder(handle_unknown="ignore"), categoricals)
+            (
+                "cat",
+                OneHotEncoder(handle_unknown="ignore", sparse_output=False),
+                categoricals,
+            )
         )
     if len(ordinals) > 0:
         list_transformers.append(("ord", OrdinalEncoder(), ordinals))

@@ -27,15 +27,14 @@ def test_classification_algorithms(
     num_rows = len(df)
     is_linear = check_linearity(df, target)
     preprocessor = make_preprocessor(numericals, categoricals, ordinals)
-    preprocessor_correlations = make_preprocessor(numericals, categoricals, ordinals)
     X = df.copy()
-    X_corr_transformed = preprocessor_correlations.fit_transform(X)
     X.drop(columns=target, inplace=True)
     X_transformed = preprocessor.fit_transform(X)
+
     y = df[target]
 
     df_transformed = DataFrame(
-        X_corr_transformed, columns=preprocessor_correlations.get_feature_names_out()
+        X_transformed, columns=preprocessor.get_feature_names_out()
     )
     corr_pairs = extract_correlation_pairs(df_transformed)
     df_all_correlations = DataFrame(corr_pairs)
@@ -55,24 +54,22 @@ def test_classification_algorithms(
         if check_independence(df, target):
             # and multiple classes -> NaiveBayes
             if len_target > 1:
-                model, hiperparameter_df = train_naive_model(num_cols, X, y, preprocessor)
+                model, hiperparameter_df = train_naive_model(
+                    num_cols, X, y, preprocessor
+                )
 
         # not independents and a short dataset -> DecisionTree
         elif num_rows < 1000 and num_cols < 10:
-            model, hiperparameter_df = train_decision_tree_model(X_transformed, y)
+            model, hiperparameter_df = train_decision_tree_model(X, y)
 
     if not model:
         # If no model until here and multiple classes -> RandomForestClassifier
         if len_target > 1:
-            model, hiperparameter_df = train_random_forest_classifier_model(
-                X_transformed, y
-            )
+            model, hiperparameter_df = train_random_forest_classifier_model(X, y)
 
             # Fallback -> GradientBoostingClassifier
         else:
-            model, hiperparameter_df = train_gradient_boosting_classifier_model(
-                X_transformed, y
-            )
+            model, hiperparameter_df = train_gradient_boosting_classifier_model(X, y)
     return (
         model,
         preprocessor,
@@ -113,7 +110,13 @@ def train_naive_model(num_cols, X, y, preprocessor):
         algorithm="naive", X=X, preprocessor=preprocessor, y=y, num_cols=num_cols
     )
 
-    model = Pipeline(steps=[("preprocessor", preprocessor), ("feature_selection", SelectKBest(score_func=f_classif, k=k)), ("naive", GaussianNB())])
+    model = Pipeline(
+        steps=[
+            ("preprocessor", preprocessor),
+            ("feature_selection", SelectKBest(score_func=f_classif, k=k)),
+            ("naive", GaussianNB()),
+        ]
+    )
 
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=0.3, random_state=51, shuffle=True
