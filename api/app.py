@@ -15,9 +15,7 @@ import pandas as pd
 from pandas import DataFrame
 from utils.global_cleaner import global_cleaner
 from model_tests.classification import test_classification_algorithms
-from utils.dataframes import (
-    compact_file_to_less_than_max_size_mb,
-)
+
 from utils.extractors import extract_numericals_categoricals_and_ordinals
 from utils.conversor import convert_to_df
 from database.session import create_local_tables
@@ -27,15 +25,10 @@ from model_tests.regression import test_regression_algorithms
 from database.models import MLModel
 from model_tests.clustering import test_clustering_algorithms
 import zipfile
-from cryptography.fernet import Fernet
 
 load_dotenv()
 
-MAX_POSSIBLE_SIZE_ORIGINAL_FILE = (
-    200 * 1024 * 1024
-)  # If the csv is less than 200mb, will compact him to ~25MB, otherwise, no chance...
-MAX_SIZE_TO_SAVE = 25 * 1024 * 1024  # 25MB is the maximum size of test datasets for now
-
+MAX_POSSIBLE_SIZE_ORIGINAL_FILE = 200 * 1024 * 1024
 ALLOW_LOCAL_FALLBACK = os.getenv("ALLOW_LOCAL_FALLBACK")
 
 
@@ -74,7 +67,7 @@ async def analyze(
     if len(contents) > MAX_POSSIBLE_SIZE_ORIGINAL_FILE:
         raise HTTPException(
             status_code=400,
-            detail=f"The file size exceeds our safe limit ({MAX_SIZE_TO_SAVE / 1024 / 1024:.2f}mb) and our compression limit ({MAX_POSSIBLE_SIZE_ORIGINAL_FILE / 1024 / 1024:.2f}mb).",
+            detail=f"The file size exceeds our size limit ({MAX_POSSIBLE_SIZE_ORIGINAL_FILE / 1024 / 1024:.2f}mb).",
         )
 
     file_extension = Path(file.filename).suffix.lower()
@@ -85,12 +78,6 @@ async def analyze(
     df = convert_to_df(
         BytesIO(contents), file_extension, sheet_name=sheet_name, sep=separator
     )
-
-    df_size_in_mb = df.memory_usage(deep=True).sum() / (1024**2)
-
-    while df_size_in_mb > MAX_SIZE_TO_SAVE:
-        # Return a df with 10% less data until it stops exceeding the safe backup limit on S3
-        df = compact_file_to_less_than_max_size_mb(df)
 
     # Convert the numpy classes to primitive classes to return to the frontend
     converted_df = df.convert_dtypes()
@@ -149,7 +136,7 @@ async def test_models(
     if id_columns:
         df.drop(columns=[column for column in json.loads(id_columns)], inplace=True)
 
-    clean_df = global_cleaner(df)
+    clean_df, changed_columns = global_cleaner(df)
 
     valid_dict_types = {}
     any_str_columns = []
@@ -210,19 +197,22 @@ async def test_models(
         X = df.drop(columns=target)
         y = df[target]
 
-        X_transformed = pp.fit_transform(X)
-
-        best_model.fit(X_transformed, y)
+        best_model.fit(X, y)
         prediction_df = DataFrame([dict_values], columns=X.columns)
-        dict_values_transformed = pp.transform(prediction_df)
 
-        y_predict = best_model.predict(dict_values_transformed)
+        valid_keys = {}
+        for key, value in dict_values.items():
+            if key in clean_df.columns:
+                valid_keys[key] = value
+        y_predict = best_model.predict(DataFrame([dict_values]))
         prediction_df[target] = y_predict
 
         # Put the final dataset, the high correlation, the all correlation dataset and the model itself in a zip
         output = BytesIO()
 
         with zipfile.ZipFile(output, "w") as z:
+            if changed_columns is not None:
+                z.writestr("changed_columns.csv", changed_columns.to_csv(index=False))
             z.writestr("prediction.csv", prediction_df.to_csv(index=False)),
             z.writestr("stats_df.csv", stats_df.to_csv(index=False)),
             z.writestr("high_correlations.csv", csv_high_correlations)
@@ -267,7 +257,7 @@ async def test_models(
             z.writestr("stats_df.csv", stats_df.to_csv(index=False)),
             z.writestr("high_correlations.csv", csv_high_correlations)
             z.writestr("all_correlations.csv", csv_all_correlations)
-            if knn:
+            if knn is not None:
                 z.writestr("knn.pkl", pickle.dumps(knn)),
             z.writestr(f"ml_model.pkl", ml_model)
             z.writestr(f"preprocessor.pkl", preprocessor)

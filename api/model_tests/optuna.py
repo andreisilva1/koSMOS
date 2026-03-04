@@ -1,6 +1,7 @@
 from math import ceil
 
 import optuna
+from pandas import DataFrame
 from sklearn.cluster import AgglomerativeClustering, BisectingKMeans, KMeans
 from sklearn.ensemble import (
     HistGradientBoostingClassifier,
@@ -20,13 +21,15 @@ from sklearn.metrics import (
 )
 from sklearn.model_selection import StratifiedKFold, cross_val_score, train_test_split
 from sklearn.naive_bayes import GaussianNB
+from sklearn.pipeline import Pipeline
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.metrics import r2_score
 
 
 def optuna_test(
     algorithm,
-    X_transformed,
+    X,
+    preprocessor,
     y=None,
     n_groups: int = None,
     num_cols: int = None,
@@ -34,9 +37,10 @@ def optuna_test(
     classifier: bool = False,
     n_trials: int = 20,
 ):
-    if y:
+    X_train, X_test, y_train, y_test = None, None, None, None
+    if y is not None:
         X_train, X_test, y_train, y_test = train_test_split(
-            X_transformed, y, test_size=0.3, random_state=51, shuffle=True
+            X, y, test_size=0.3, random_state=51, shuffle=True
         )
 
     if algorithm == "logistic":
@@ -45,7 +49,7 @@ def optuna_test(
             penalty = trial.suggest_categorical("penalty", ["l1", "l2"])
             c_values = trial.suggest_categorical("c_values", [100, 10, 1, 0.1, 0.01])
 
-            logistic_model = LogisticRegression(penalty=penalty, C=c_values)
+            logistic_model = Pipeline(steps=[("preprocessor", preprocessor), ("logistic_model", LogisticRegression(penalty=penalty, C=c_values))])
             logistic_model.fit(X_train, y_train)
 
             y_decision_optuna = logistic_model.decision_function(X_test)
@@ -77,23 +81,22 @@ def optuna_test(
             k = trial.suggest_int("k", 1, num_cols + 1)
 
             kbest = SelectKBest(score_func=f_classif, k=k)
-            naive_model = GaussianNB()
-
-            X_train_best_features = kbest.fit_transform(X_train, y_train)
-            naive_model.fit(X_train_best_features, y_train)
-            X_test_best_features = kbest.transform(X_test)
-            y_pred = naive_model.predict(X_test_best_features)
+            naive_model = Pipeline(steps=[("preprocessor", preprocessor), ("feature_selection", kbest), ("naive_bayes", GaussianNB())])
+            
+            naive_model.fit(X_train, y_train)
+        
+            y_pred = naive_model.predict(X_test)
 
             recall = recall_score(y_test, y_pred, average="macro")
 
             return recall
 
-        naive_bayes_seach_space = {"k": (1, num_cols)}
+        naive_bayes_search_space = {"k": (1, num_cols)}
         naive_bayes_study = optuna.create_study(
-            sampler=optuna.samplers.GridSampler(search_space=naive_bayes_seach_space),
-            directions=["maximize"],
+            sampler=optuna.samplers.GridSampler(search_space=naive_bayes_search_space),
+            direction="maximize",
         )
-        naive_bayes_study.optimize(naive_bayes_optuna)
+        naive_bayes_study.optimize(naive_bayes_optuna, n_trials=n_trials)
         k = naive_bayes_study.best_params["k"]
         return k
 
@@ -103,14 +106,14 @@ def optuna_test(
             min_samples_leaf = trial.suggest_int("min_samples_leaf", 2, 20)
             max_depth = trial.suggest_int("max_depth", 2, 8)
 
-            decision_tree_model = DecisionTreeClassifier(
-                min_samples_leaf=min_samples_leaf, max_depth=max_depth
-            )
-
             cv_folds = StratifiedKFold(n_splits=5, shuffle=True, random_state=51)
+            decision_tree_model = Pipeline(steps=[("preprocessor", preprocessor), ("k-fold", cv_folds), ("decision_tree", DecisionTreeClassifier(
+                min_samples_leaf=min_samples_leaf, max_depth=max_depth)
+            )])
 
+            
             scores = cross_val_score(
-                decision_tree_model, X_transformed, y, cv=cv_folds, scoring="accuracy"
+                decision_tree_model, X, y, cv=cv_folds, scoring="accuracy"
             )
 
             return scores.mean()
@@ -136,7 +139,7 @@ def optuna_test(
             bootstrap = trial.suggest_categorical("bootstrap", [True, False])
 
             if classifier:
-                random_forest_model = RandomForestClassifier(
+                random_forest = RandomForestClassifier(
                     n_estimators=n_estimators,
                     max_depth=max_depth,
                     min_samples_split=min_samples_split,
@@ -145,7 +148,7 @@ def optuna_test(
                     bootstrap=bootstrap,
                 )
             else:
-                random_forest_model = RandomForestRegressor(
+                random_forest = RandomForestRegressor(
                     n_estimators=n_estimators,
                     max_depth=max_depth,
                     min_samples_split=min_samples_split,
@@ -153,6 +156,8 @@ def optuna_test(
                     max_features=max_features,
                     bootstrap=bootstrap,
                 )
+                
+            random_forest_model = Pipeline(steps=[("preprocessor") ,("random_forest", random_forest)])
 
             random_forest_model.fit(X_train, y_train)
             y_pred = random_forest_model.predict(X_test)
@@ -215,7 +220,7 @@ def optuna_test(
             max_bins = trial.suggest_int("max_bins", 100, 255)
 
             if classifier:
-                hist_gradient_model = HistGradientBoostingClassifier(
+                hist_gradient = HistGradientBoostingClassifier(
                     learning_rate=learning_rate,
                     max_iter=max_iter,
                     max_depth=max_depth,
@@ -225,7 +230,7 @@ def optuna_test(
                     max_bins=max_bins,
                 )
             else:
-                hist_gradient_model = HistGradientBoostingRegressor(
+                hist_gradient = HistGradientBoostingRegressor(
                     learning_rate=learning_rate,
                     max_iter=max_iter,
                     max_depth=max_depth,
@@ -235,6 +240,7 @@ def optuna_test(
                     max_bins=max_bins,
                 )
 
+            hist_gradient_model = Pipeline(steps=[("preprocessor", preprocessor), ("gradient_boosting", hist_gradient)])
             hist_gradient_model.fit(X_train, y_train)
             y_pred = hist_gradient_model.predict(X_test)
 
@@ -291,13 +297,13 @@ def optuna_test(
             n_clusters = trial.suggest_int("n_clusters", 2, n_groups)
             max_iter = trial.suggest_int("max_iter", 200, 500)
             n_init = trial.suggest_int("n_init", 10, 30)
-            model_kmeans = KMeans(
-                n_clusters=n_clusters, max_iter=max_iter, n_init=n_init
-            )
+            model_kmeans = Pipeline(steps=[("preprocessor", preprocessor), ("kmeans", KMeans(
+                n_clusters=n_clusters, max_iter=max_iter, n_init=n_init))
+            ])
 
             # if it is collinear, it will use X_pca, which overwrites X_transformed; if it is not collinear, it uses the normal X_transformed.
-            labels = model_kmeans.fit_predict(X_transformed)
-            sillhouette_avg = silhouette_score(X_transformed, labels=labels)
+            labels = model_kmeans.fit_predict(X)
+            sillhouette_avg = silhouette_score(X, labels=labels)
 
             return sillhouette_avg
 
@@ -332,13 +338,13 @@ def optuna_test(
                 "linkage", ["ward", "single", "complete", "average"]
             )
 
-            model_hierarchical = AgglomerativeClustering(
-                n_clusters=n_clusters, linkage=linkage
+            model_hierarchical = Pipeline(steps=[("preprocessor", preprocessor), ("agglomerative", AgglomerativeClustering(
+                n_clusters=n_clusters, linkage=linkage))]
             )
 
             # if it is collinear, it will use X_pca, which overwrites X_transformed; if it is not collinear, it uses the normal X_transformed.
-            labels = model_hierarchical.fit_predict(X_transformed)
-            sillhouette_avg = silhouette_score(X_transformed, labels=labels)
+            labels = model_hierarchical.fit_predict(X)
+            sillhouette_avg = silhouette_score(X, labels=labels)
 
             return sillhouette_avg
 
@@ -364,11 +370,11 @@ def optuna_test(
         def hierarchical_div_optuna(trial):
             n_clusters = trial.suggest_int("n_clusters", 2, ceil(0.5 * num_rows))
 
-            hieraquical_model = BisectingKMeans(n_clusters=n_clusters)
+            hieraquical_model = Pipeline(steps=[("preprocessor", preprocessor), ("divisive", BisectingKMeans(n_clusters=n_clusters))])
 
-            labels = hieraquical_model.fit_predict(X_transformed)
+            labels = hieraquical_model.fit_predict(X)
 
-            silhouette_avg = silhouette_score(X_transformed, labels=labels)
+            silhouette_avg = silhouette_score(X, labels=labels)
 
             return silhouette_avg
 
@@ -387,15 +393,15 @@ def optuna_test(
             n_clusters=best_params_agglomerative_clustering["n_clusters"],
             linkage=best_params_agglomerative_clustering["linkage"],
         )
-        agg_labels = agg_model.fit_predict(X_transformed)
+        agg_labels = agg_model.fit_predict(X)
 
         div_model = BisectingKMeans(
             n_clusters=best_params_divisive_clustering["n_clusters"]
         )
-        div_labels = div_model.fit_predict(X_transformed)
+        div_labels = div_model.fit_predict(X)
 
-        agg_best_sillhouette = silhouette_score(X_transformed, labels=agg_labels)
-        div_best_sillhouette = silhouette_score(X_transformed, labels=div_labels)
+        agg_best_sillhouette = silhouette_score(X, labels=agg_labels)
+        div_best_sillhouette = silhouette_score(X, labels=div_labels)
         best_model = (
             agg_model if agg_best_sillhouette >= div_best_sillhouette else div_model
         )

@@ -1,4 +1,3 @@
-
 from pandas import DataFrame
 from sklearn.cluster import KMeans
 from sklearn.metrics import silhouette_score
@@ -15,8 +14,8 @@ from checks.statistics import check_collinearity
 def test_clustering_algorithms(
     cluster_method: str,
     df: DataFrame,
-    numericals: list,
-    ordinals: list,
+    numericals: list = [],
+    ordinals: list = [],
     n_groups: int = None,
 ):
     # Normalization

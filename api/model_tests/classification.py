@@ -55,7 +55,7 @@ def test_classification_algorithms(
         if check_independence(df, target):
             # and multiple classes -> NaiveBayes
             if len_target > 1:
-                model, hiperparameter_df = train_naive_model(num_cols, X_transformed, y)
+                model, hiperparameter_df = train_naive_model(num_cols, X, y, preprocessor)
 
         # not independents and a short dataset -> DecisionTree
         elif num_rows < 1000 and num_cols < 10:
@@ -108,23 +108,19 @@ def train_logistic_model(X_transformed, y, preprocessor):
     return model, logistic_hiperparameter_info_df
 
 
-def train_naive_model(num_cols, X_transformed, y, preprocessor):
+def train_naive_model(num_cols, X, y, preprocessor):
     k = optuna_test(
-        algorithm="naive", X_transformed=X_transformed, y=y, num_cols=num_cols
+        algorithm="naive", X=X, preprocessor=preprocessor, y=y, num_cols=num_cols
     )
 
-    model = Pipeline(steps=[("preprocessor", preprocessor), ("naive", GaussianNB())])
+    model = Pipeline(steps=[("preprocessor", preprocessor), ("feature_selection", SelectKBest(score_func=f_classif, k=k)), ("naive", GaussianNB())])
 
     X_train, X_test, y_train, y_test = train_test_split(
-        X_transformed, y, test_size=0.3, random_state=51, shuffle=True
+        X, y, test_size=0.3, random_state=51, shuffle=True
     )
 
-    kbest = SelectKBest(score_func=f_classif, k=k)
-
-    X_train_best_features = kbest.fit_transform(X_train, y_train)
-    model.fit(X_train_best_features, y_train)
-    X_test_best_features = kbest.transform(X_test)
-    y_pred = model.predict(X_test_best_features)
+    model.fit(X_train, y_train)
+    y_pred = model.predict(X_test)
 
     accuracy = return_accuracy_classification(y_pred, y_test)
 

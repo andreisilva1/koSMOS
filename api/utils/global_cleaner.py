@@ -8,6 +8,32 @@ MAX_ROWS = 5000
 def global_cleaner(df: DataFrame, target: str = None):
     clean_df = df.copy()
 
+    changed_columns = {
+        "changed_to_binary": [],
+        "removed_by_unique_values": [],
+        "removed_by_null_target": [],
+        "removed_by_constant_value": [],
+        "removed_by_many_missing_values": [],
+        "probably_unique_values_columns" : []
+    }
+    probably_unique_values_columns = []
+    for column in clean_df.columns:
+        if clean_df[column].nunique() / len(clean_df) > 0.85:
+            if not pd.api.types.is_numeric_dtype(clean_df[column]):
+                clean_df.drop(
+                    columns=column,
+                    inplace=True,
+                )
+                probably_unique_values_columns.append(column)
+    changed_columns["probably_unique_values_columns"] = probably_unique_values_columns
+    # Drop columns with number of values = 85% of the number os rows (columns that MAYBE can be IDs)
+    clean_df.drop(
+        columns=probably_unique_values_columns,
+        inplace=True,
+    )
+
+    changed_columns["removed_by_unique_values"] = probably_unique_values_columns
+
     # Create a compressed_df to use in tests: a dataframe of 5.000 rows maximum that maintains (in the best possible way) the same proportion as the original
     if len(clean_df) > MAX_ROWS:
         if target and target in clean_df.columns:
@@ -36,6 +62,7 @@ def global_cleaner(df: DataFrame, target: str = None):
             )  # Remove invisible spaces in str columns
 
             if clean_df[col].nunique() == 2:
+                changed_columns["changed_to_binary"].append(col)
                 first_value = clean_df[col].unique()[0]
                 clean_df[col] = (clean_df[col] == first_value).astype(
                     int
@@ -56,12 +83,17 @@ def global_cleaner(df: DataFrame, target: str = None):
             )
 
         # Exclude rows where the target is null
+        changed_columns["rows_removed_by_null_target"] = clean_df[
+            clean_df[target].isna()
+        ].sum()
         clean_df = clean_df[clean_df[target].notna()]
 
     # Remove constant columns
     constant_columns = [
         column for column in clean_df.columns if clean_df[column].nunique() == 1
     ]
+
+    changed_columns["removed_by_constant_value"] = constant_columns
     if constant_columns:
         clean_df.drop(columns=constant_columns, inplace=True)
 
@@ -72,7 +104,20 @@ def global_cleaner(df: DataFrame, target: str = None):
     much_missing_values_columns = [
         column for column in clean_df.columns if clean_df[column].isna().mean() > 0.6
     ]
+
+    changed_columns["removed_by_many_missing_values"] = much_missing_values_columns
+
     if much_missing_values_columns:
         clean_df.drop(columns=much_missing_values_columns, inplace=True)
 
-    return clean_df
+
+    not_null_changed_columns = {}
+    for key, value in changed_columns.items():
+        if value:
+            not_null_changed_columns[key] = value
+
+    changed_columns_df = None
+    if not_null_changed_columns:
+        changed_columns_df = DataFrame([not_null_changed_columns])
+
+    return clean_df, changed_columns_df

@@ -51,11 +51,6 @@ def return_prediction(target: str, df: DataFrame, dict_values: dict, best_model)
     return to_predict_df
 
 
-def compact_file_to_less_than_max_size_mb(df: DataFrame):
-    # Return a df with 10% less data.
-    return df.sample(frac=0.9, random_state=51)
-
-
 def return_accuracy_regression(y_pred, y_test):
     tolerancy = 0.10  # considers the prediction that “the error will be no more than 10% of the actual value” to be correct (the old formula returned extreme negative values, for a unknown reason)
 
