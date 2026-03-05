@@ -1,7 +1,6 @@
 from math import ceil
 
 import optuna
-from pandas import DataFrame
 from sklearn.cluster import AgglomerativeClustering, BisectingKMeans, KMeans
 from sklearn.ensemble import (
     HistGradientBoostingClassifier,
@@ -18,6 +17,7 @@ from sklearn.metrics import (
     recall_score,
     roc_curve,
     silhouette_score,
+    accuracy_score,
 )
 from sklearn.model_selection import StratifiedKFold, cross_val_score, train_test_split
 from sklearn.naive_bayes import GaussianNB
@@ -52,7 +52,12 @@ def optuna_test(
             logistic_model = Pipeline(
                 steps=[
                     ("preprocessor", preprocessor),
-                    ("logistic_model", LogisticRegression(penalty=penalty, C=c_values)),
+                    (
+                        "logistic_model",
+                        LogisticRegression(
+                            penalty=penalty, C=c_values, solver="liblinear"
+                        ),
+                    ),
                 ]
             )
             logistic_model.fit(X_train, y_train)
@@ -121,7 +126,6 @@ def optuna_test(
             decision_tree_model = Pipeline(
                 steps=[
                     ("preprocessor", preprocessor),
-                    ("k-fold", cv_folds),
                     (
                         "decision_tree",
                         DecisionTreeClassifier(
@@ -141,7 +145,7 @@ def optuna_test(
         decision_tree_study.optimize(decisiontree_optuna, n_trials=n_trials)
         min_samples_leaf, max_depth = (
             decision_tree_study.best_params["min_samples_leaf"],
-            decision_tree_study["max_depth"],
+            decision_tree_study.best_params["max_depth"],
         )
         return min_samples_leaf, max_depth
 
@@ -177,15 +181,16 @@ def optuna_test(
                 )
 
             random_forest_model = Pipeline(
-                steps=[("preprocessor"), ("random_forest", random_forest)]
+                steps=[("preprocessor", preprocessor), ("random_forest", random_forest)]
             )
 
             random_forest_model.fit(X_train, y_train)
             y_pred = random_forest_model.predict(X_test)
 
-            r2 = r2_score(y_test, y_pred)
-
-            return r2
+            if isinstance(random_forest_model, RandomForestClassifier):
+                return r2_score(y_test, y_pred)
+            else:
+                return accuracy_score(y_test, y_pred)
 
         random_forest_search_space = {
             "n_estimators": (50, 500),

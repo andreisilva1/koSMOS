@@ -7,7 +7,7 @@ from sklearn.preprocessing import PolynomialFeatures
 from utils.dataframes import make_preprocessor, return_accuracy_regression
 from utils.extractors import extract_correlation_pairs
 from checks.statistics import check_linearity
-from sklearn.metrics import r2_score
+from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 
 
 def test_regression_algorithms(
@@ -31,7 +31,6 @@ def test_regression_algorithms(
     )
     X_corr_transformed = preprocessor_correlations.fit_transform(X)
     X.drop(columns=target, inplace=True)
-    X_transformed = preprocessor.fit_transform(X)
     y = df[target]
 
     df_transformed = DataFrame(
@@ -45,19 +44,19 @@ def test_regression_algorithms(
 
     # Clearly linear and few columns -> LinearRegression
     if is_linear and num_cols <= 10:
-        model, stats_df = train_linear_model(X_transformed, y)
+        model, stats_df = train_linear_model(X, y, preprocessor)
 
     # Not linear and few columns -> PolynomialRegression
     elif num_cols * 3 <= 30 and not is_linear:
-        model, stats_df = train_polynomial_model(X_transformed, y)
+        model, stats_df = train_polynomial_model(X, y, preprocessor)
 
     # Much rows and much columns -> RandomForestRegressor
     elif num_rows > 1000 and num_cols > 10:
-        model, stats_df = train_random_forest_regression_model(X_transformed, y)
+        model, stats_df = train_random_forest_regression_model(X, y, preprocessor)
 
     # Fallback -> GradientBoostingRegressor
     else:
-        model, stats_df = train_gradient_boosting_regression_model(X_transformed, y)
+        model, stats_df = train_gradient_boosting_regression_model(X, y, preprocessor)
 
     return (
         model,
@@ -68,26 +67,31 @@ def test_regression_algorithms(
     )
 
 
-def train_linear_model(X_transformed, y):
-    model = LinearRegression()
+def train_linear_model(X, y, preprocessor):
+    model = Pipeline(
+        steps=[("preprocessor", preprocessor), ("regressor", LinearRegression())]
+    )
     X_train, X_test, y_train, y_test = train_test_split(
-        X_transformed, y, test_size=0.3, random_state=51, shuffle=True
+        X, y, test_size=0.3, random_state=51, shuffle=True
     )
     model.fit(X_train, y_train)
     y_pred = model.predict(X_test)
 
+    msre = mean_squared_error(y_test, y_pred)
+    mae = mean_absolute_error(y_test, y_pred)
     accuracy = return_accuracy_regression(y_pred, y_test)
 
     stats_df = DataFrame(
-        [["linear_model", f"{accuracy:.2f}"]], columns=["model_type", "accuracy"]
+        [["linear_model", f"{accuracy:.2f}", msre, mae]],
+        columns=["model_type", "accuracy", "mean_squared_error", "mean_absolute_error"],
     )
 
     return model, stats_df
 
 
-def train_polynomial_model(X_transformed, y):
+def train_polynomial_model(X, y, preprocessor):
     X_train, X_test, y_train, y_test = train_test_split(
-        X_transformed, y, test_size=0.3, random_state=51, shuffle=True
+        X, y, test_size=0.3, random_state=51, shuffle=True
     )
     polynomial_degrees = [1, 2, 3]
     best_r2 = -float("inf")
@@ -96,7 +100,11 @@ def train_polynomial_model(X_transformed, y):
         poly_feat = PolynomialFeatures(degree=degree, include_bias=False)
 
         model = Pipeline(
-            steps=[("poly_feat", poly_feat), ("regressor", LinearRegression())]
+            steps=[
+                ("preprocessor", preprocessor),
+                ("poly_feat", poly_feat),
+                ("regressor", LinearRegression()),
+            ]
         )
 
         model.fit(X_train, y_train)
@@ -110,59 +118,93 @@ def train_polynomial_model(X_transformed, y):
 
     poly_feat = PolynomialFeatures(degree=best_degree)
     model = Pipeline(
-        steps=[("poly_feat", poly_feat), ("regressor", LinearRegression())]
+        steps=[
+            ("preprocessor", preprocessor),
+            ("poly_feat", poly_feat),
+            ("regressor", LinearRegression()),
+        ]
     )
 
     model.fit(X_train, y_train)
     y_pred = model.predict(X_test)
 
+    msre = mean_squared_error(y_test, y_pred)
+    mae = mean_absolute_error(y_test, y_pred)
     accuracy = return_accuracy_regression(y_pred, y_test)
     stats_df = DataFrame(
-        [["polynomial_model", f"{accuracy:.2f}", best_degree]],
-        columns=["model_type", "accuracy", "degree"],
+        [["polynomial_model", f"{accuracy:.2f}", best_degree, msre, mae]],
+        columns=[
+            "model_type",
+            "accuracy",
+            "degree",
+            "mean_squared_error",
+            "mean_absolute_error",
+        ],
     )
 
     return model, stats_df
 
 
-def train_random_forest_regression_model(X_transformed, y):
+def train_random_forest_regression_model(X, y, preprocessor):
     # Generic RandomForestRegression
-    model = RandomForestRegressor(
-        n_estimators=200, max_features="sqrt", random_state=51
+    model = Pipeline(
+        steps=[
+            ("preprocessor", preprocessor),
+            (
+                "regressor",
+                RandomForestRegressor(
+                    n_estimators=200, max_features="sqrt", random_state=51
+                ),
+            ),
+        ]
     )
     X_train, X_test, y_train, y_test = train_test_split(
-        X_transformed, y, test_size=0.3, random_state=51
+        X, y, test_size=0.3, random_state=51
     )
     model.fit(X_train, y_train)
     y_pred = model.predict(X_test)
+
+    msre = mean_squared_error(y_test, y_pred)
+    mae = mean_absolute_error(y_test, y_pred)
     accuracy = return_accuracy_regression(y_pred, y_test)
 
     stats_df = DataFrame(
-        [["random_forest_regression", f"{accuracy:.2f}"]],
-        columns=["model_type", "accuracy"],
+        [["random_forest_regression", f"{accuracy:.2f}", msre, mae]],
+        columns=["model_type", "accuracy", "mean_squared_error", "mean_absolute_error"],
     )
 
     return model, stats_df
 
 
-def train_gradient_boosting_regression_model(X_transformed, y):
+def train_gradient_boosting_regression_model(X, y, preprocessor):
     # Generic GradientBoostingRegression Model
-    model = HistGradientBoostingRegressor(
-        max_iter=200,
-        min_samples_leaf=20,
-        l2_regularization=1.0,
-        random_state=51,
+    model = Pipeline(
+        steps=[
+            ("preprocessor", preprocessor),
+            (
+                "regressor",
+                HistGradientBoostingRegressor(
+                    max_iter=200,
+                    min_samples_leaf=20,
+                    l2_regularization=1.0,
+                    random_state=51,
+                ),
+            ),
+        ]
     )
     X_train, X_test, y_train, y_test = train_test_split(
-        X_transformed, y, test_size=0.3, random_state=51
+        X, y, test_size=0.3, random_state=51
     )
     model.fit(X_train, y_train)
     y_pred = model.predict(X_test)
+
+    msre = mean_squared_error(y_test, y_pred)
+    mae = mean_absolute_error(y_test, y_pred)
     accuracy = return_accuracy_regression(y_pred, y_test)
 
     stats_df = DataFrame(
-        [["gradient_boosting_regression", f"{accuracy:.2f}"]],
-        columns=["model_type", "accuracy"],
+        [["gradient_boosting_regression", f"{accuracy:.2f}", msre, mae]],
+        columns=["model_type", "accuracy", "mean_squared_error", "mean_absolute_error"],
     )
 
     return model, stats_df

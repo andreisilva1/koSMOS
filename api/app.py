@@ -10,7 +10,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi import Body, FastAPI, Form, HTTPException, UploadFile
 from fastapi.responses import JSONResponse, StreamingResponse
 import joblib
-import boto3
 import pandas as pd
 from pandas import DataFrame
 from utils.global_cleaner import global_cleaner
@@ -27,6 +26,7 @@ from model_tests.clustering import test_clustering_algorithms
 import zipfile
 
 load_dotenv()
+
 
 MAX_POSSIBLE_SIZE_ORIGINAL_FILE = 200 * 1024 * 1024
 ALLOW_LOCAL_FALLBACK = os.getenv("ALLOW_LOCAL_FALLBACK")
@@ -45,7 +45,7 @@ async def lifespan_handler(app: FastAPI):
     yield
 
 
-app = FastAPI(lifespan=lifespan_handler)
+app = FastAPI(lifespan=lifespan_handler, redoc_url=None, docs_url=None, openapi_url=None)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -71,10 +71,6 @@ async def analyze(
         )
 
     file_extension = Path(file.filename).suffix.lower()
-    df = convert_to_df(
-        BytesIO(contents), file_extension, sheet_name=sheet_name, sep=separator
-    )
-
     df = convert_to_df(
         BytesIO(contents), file_extension, sheet_name=sheet_name, sep=separator
     )
@@ -298,7 +294,12 @@ async def send_model(
             target=target if target else None,
         )
     )
-    return JSONResponse(status_code=200, content={"detail": "Dataset saved."})
+    return JSONResponse(
+        status_code=200,
+        content={
+            "detail": f"Model saved, you can use in API using his ID: {model_id}."
+        },
+    )
 
 
 @app.get("/load_model/{model_id}")

@@ -15,12 +15,13 @@ def test_clustering_algorithms(
     cluster_method: str,
     df: DataFrame,
     numericals: list = [],
+    categoricals: list = [],
     ordinals: list = [],
     n_groups: int = None,
 ):
     # Normalization
     X = df.copy()
-    preprocessor = make_preprocessor(numericals, ordinals)
+    preprocessor = make_preprocessor(numericals, categoricals, ordinals)
 
     # Start KNN to predict the cluster of new items
     knn = Pipeline(
@@ -54,7 +55,7 @@ def test_clustering_algorithms(
             n_components and n_components * n_groups > 50
         ):  # Apparently is a good complexity scenario to start use optuna.
             best_n_clusters, best_max_iter, best_n_init = optuna_test(
-                algorithm="k-means", X_transformed=X_transformed, n_groups=n_groups
+                algorithm="k-means", X=X, n_groups=n_groups, preprocessor=preprocessor
             )
             best_model = KMeans(
                 n_clusters=best_n_clusters,
@@ -96,7 +97,7 @@ def test_clustering_algorithms(
     if cluster_method == "hierarchical":
 
         best_model, linkage, hierarchical_n_clusters, divisive_n_clusters = optuna_test(
-            algorithm="hierarchical", X_transformed=X_transformed, num_rows=len(df)
+            algorithm="hierarchical", X=X, num_rows=len(df), preprocessor=preprocessor
         )
 
         if isinstance(best_model, AgglomerativeClustering):

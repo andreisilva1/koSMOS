@@ -62,7 +62,3 @@ def return_accuracy_regression(y_pred, y_test):
 
     accuracy = np.mean(correct_guesses)
     return accuracy * 100
-
-
-def return_accuracy_classification(y_pred, y_test):
-    return (y_pred == y_test).mean() * 100

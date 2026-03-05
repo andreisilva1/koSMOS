@@ -10,9 +10,15 @@ from sklearn.naive_bayes import GaussianNB
 from sklearn.pipeline import Pipeline
 from sklearn.tree import DecisionTreeClassifier
 from model_tests.optuna import optuna_test
-from utils.dataframes import make_preprocessor, return_accuracy_classification
+from utils.dataframes import make_preprocessor
 from utils.extractors import extract_correlation_pairs
 from checks.statistics import check_independence, check_linearity
+from sklearn.metrics import (
+    f1_score,
+    precision_score,
+    recall_score,
+    r2_score,
+)
 
 
 # Treinar modelos de LogisticRegression, NaiveBayes e DecisionTree
@@ -47,7 +53,7 @@ def test_classification_algorithms(
     # Few classes and it's linear -> LogisticRegression
     if is_linear:
         if len_target < 10:
-            model, hiperparameter_df = train_logistic_model(X_transformed, y)
+            model, hiperparameter_df = train_logistic_model(X, y, preprocessor)
 
     else:
         # Features are approximately independents (or complexe relations)...
@@ -79,27 +85,51 @@ def test_classification_algorithms(
     )
 
 
-def train_logistic_model(X_transformed, y, preprocessor):
+def train_logistic_model(X, y, preprocessor):
     penalty, c_values = optuna_test(
-        algorithm="logistic", X_transformed=X_transformed, y=y
+        algorithm="logistic", X=X, y=y, preprocessor=preprocessor
     )
     model = Pipeline(
         steps=[
             ("preprocessor", preprocessor),
-            ("logistic_regression", LogisticRegression(penalty=penalty, C=c_values)),
+            (
+                "logistic_regression",
+                LogisticRegression(penalty=penalty, C=c_values, solver="liblinear"),
+            ),
         ]
     )
     X_train, X_test, y_train, y_test = train_test_split(
-        X_transformed, y, test_size=0.3, random_state=51, shuffle=True
+        X, y, test_size=0.3, random_state=51, shuffle=True
     )
     model.fit(X_train, y_train)
     y_pred = model.predict(X_test)
 
-    accuracy = return_accuracy_classification(y_pred, y_test)
+    precision = precision_score(y_test, y_pred)
+    recall = recall_score(y_test, y_pred)
+    f1 = f1_score(y_test, y_pred)
+    accuracy = (y_pred == y_test).mean()
 
     logistic_hiperparameter_info_df = DataFrame(
-        [["logistic_regression", accuracy, penalty, c_values]],
-        columns=["model_type", "accuracy", "penalty", "c_values"],
+        [
+            [
+                "logistic_regression",
+                accuracy,
+                penalty,
+                c_values,
+                precision,
+                recall,
+                f1,
+            ]
+        ],
+        columns=[
+            "model_type",
+            "accuracy",
+            "penalty",
+            "c_values",
+            "precision_score",
+            "recall_score",
+            "f1_score",
+        ],
     )
 
     return model, logistic_hiperparameter_info_df
@@ -125,25 +155,29 @@ def train_naive_model(num_cols, X, y, preprocessor):
     model.fit(X_train, y_train)
     y_pred = model.predict(X_test)
 
-    accuracy = return_accuracy_classification(y_pred, y_test)
+    precision = precision_score(y_test, y_pred)
+    recall = recall_score(y_test, y_pred)
+    f1 = f1_score(y_test, y_pred)
+    accuracy = (y_pred == y_test).mean()
 
     naive_hiperparameter_info_df = DataFrame(
-        [
-            [
-                "naive_bayes",
-                accuracy,
-                k,
-            ]
+        [["naive_bayes", accuracy, k, precision, recall, f1]],
+        columns=[
+            "model_type",
+            "accuracy",
+            "k",
+            "precision_score",
+            "recall_score",
+            "f1_score",
         ],
-        columns=["model_type", "accuracy", "k"],
     )
     return model, naive_hiperparameter_info_df
 
 
-def train_decision_tree_model(X_transformed, y, preprocessor):
+def train_decision_tree_model(X, y, preprocessor):
     # Hiperparameter tuning
     min_samples_leaf, max_depth = optuna_test(
-        algorithm="decision_tree", X_transformed=X_transformed, y=y
+        algorithm="decision_tree", X=X, y=y, preprocessor=preprocessor
     )
 
     model = Pipeline(
@@ -159,21 +193,42 @@ def train_decision_tree_model(X_transformed, y, preprocessor):
     )
 
     X_train, X_test, y_train, y_test = train_test_split(
-        X_transformed, y, test_size=0.3, random_state=51
+        X, y, test_size=0.3, random_state=51
     )
     model.fit(X_train, y_train)
     y_pred = model.predict(X_test)
 
-    accuracy = return_accuracy_classification(y_pred, y_test)
+    precision = precision_score(y_test, y_pred)
+    recall = recall_score(y_test, y_pred)
+    f1 = f1_score(y_test, y_pred)
+    accuracy = (y_pred == y_test).mean()
 
     decision_tree_hiperparameter_info_df = DataFrame(
-        [["decision_tree_classifier", accuracy, min_samples_leaf, max_depth]],
-        columns=["model_type", "accuracy", "min_samples_leaf", "max_depth"],
+        [
+            [
+                "decision_tree_classifier",
+                accuracy,
+                min_samples_leaf,
+                max_depth,
+                precision,
+                recall,
+                f1,
+            ]
+        ],
+        columns=[
+            "model_type",
+            "accuracy",
+            "min_samples_leaf",
+            "max_depth",
+            "precision_score",
+            "recall_score",
+            "f1_score",
+        ],
     )
     return model, decision_tree_hiperparameter_info_df
 
 
-def train_gradient_boosting_classifier_model(X_transformed, y, preprocessor):
+def train_gradient_boosting_classifier_model(X, y, preprocessor):
     # Hiperparameter tuning
     (
         learning_rate,
@@ -184,7 +239,7 @@ def train_gradient_boosting_classifier_model(X_transformed, y, preprocessor):
         l2_regularization,
         max_bins,
     ) = optuna_test(
-        algorithm="gradient", X_transformed=X_transformed, y=y, classifier=True
+        algorithm="gradient", X=X, y=y, classifier=True, preprocessor=preprocessor
     )
     model = Pipeline(
         steps=[
@@ -205,12 +260,15 @@ def train_gradient_boosting_classifier_model(X_transformed, y, preprocessor):
         ]
     )
     X_train, X_test, y_train, y_test = train_test_split(
-        X_transformed, y, test_size=0.3, random_state=51
+        X, y, test_size=0.3, random_state=51
     )
     model.fit(X_train, y_train)
     y_pred = model.predict(X_test)
 
-    accuracy = return_accuracy_classification(y_pred, y_test)
+    precision = precision_score(y_test, y_pred)
+    recall = recall_score(y_test, y_pred)
+    f1 = f1_score(y_test, y_pred)
+    accuracy = (y_pred == y_test).mean()
 
     gradient_boosting_hiperparameter_info_df = DataFrame(
         [
@@ -224,6 +282,9 @@ def train_gradient_boosting_classifier_model(X_transformed, y, preprocessor):
                 max_leaf_nodes,
                 l2_regularization,
                 max_bins,
+                precision,
+                recall,
+                f1,
             ]
         ],
         columns=[
@@ -236,12 +297,15 @@ def train_gradient_boosting_classifier_model(X_transformed, y, preprocessor):
             "max_leaf_nodes",
             "l2_regularization",
             "max_bins",
+            "precision_score",
+            "recall_score",
+            "f1_score",
         ],
     )
     return model, gradient_boosting_hiperparameter_info_df
 
 
-def train_random_forest_classifier_model(X_transformed, y, preprocessor):
+def train_random_forest_classifier_model(X, y, preprocessor):
     # Hiperparameter tuning
     (
         n_estimators,
@@ -251,7 +315,7 @@ def train_random_forest_classifier_model(X_transformed, y, preprocessor):
         max_features,
         bootstrap,
     ) = optuna_test(
-        algorithm="random_forest", X_transformed=X_transformed, y=y, classifier=True
+        algorithm="random_forest", X=X, y=y, classifier=True, preprocessor=preprocessor
     )
 
     model = Pipeline(
@@ -273,12 +337,15 @@ def train_random_forest_classifier_model(X_transformed, y, preprocessor):
     )
 
     X_train, X_test, y_train, y_test = train_test_split(
-        X_transformed, y, test_size=0.3, random_state=51
+        X, y, test_size=0.3, random_state=51
     )
     model.fit(X_train, y_train)
     y_pred = model.predict(X_test)
 
-    accuracy = return_accuracy_classification(y_pred, y_test)
+    precision = precision_score(y_test, y_pred)
+    recall = recall_score(y_test, y_pred)
+    f1 = f1_score(y_test, y_pred)
+    accuracy = (y_pred == y_test).mean()
 
     random_forest_hiperparameter_info_df = DataFrame(
         [
@@ -291,6 +358,9 @@ def train_random_forest_classifier_model(X_transformed, y, preprocessor):
                 min_samples_leaf,
                 max_features,
                 bootstrap,
+                precision,
+                recall,
+                f1,
             ]
         ],
         columns=[
@@ -302,6 +372,9 @@ def train_random_forest_classifier_model(X_transformed, y, preprocessor):
             "min_samples_leaf",
             "max_features",
             "bootstrap",
+            "precision_score",
+            "recall_score",
+            "f_score",
         ],
     )
     return model, random_forest_hiperparameter_info_df
