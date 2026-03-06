@@ -218,7 +218,6 @@ async def test_models(
             z.writestr(f"ml_model.pkl", ml_model)
             z.writestr(f"preprocessor.pkl", preprocessor_pkl)
 
-        output.seek(0)
     if not target:
         if not n_groups:
             # No target AND n_groups? hierarchical cluster.
@@ -260,8 +259,13 @@ async def test_models(
             z.writestr(f"ml_model.pkl", ml_model)
             z.writestr(f"preprocessor.pkl", preprocessor)
 
-        output.seek(0)
 
+    basic_stats = df.describe()
+    with zipfile.ZipFile(output, "w") as z:
+        z.writestr("basic_stats.csv", basic_stats.to_csv(index=False))
+
+    output.seek(0)
+    
     return StreamingResponse(
         output,
         media_type="application/zip",
