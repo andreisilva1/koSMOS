@@ -7,7 +7,7 @@ import pickle
 from typing import Optional
 from dotenv import load_dotenv
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi import Body, FastAPI, Form, HTTPException, UploadFile
+from fastapi import Body, FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 import joblib
 import pandas as pd
@@ -45,7 +45,9 @@ async def lifespan_handler(app: FastAPI):
     yield
 
 
-app = FastAPI(lifespan=lifespan_handler, redoc_url=None, docs_url=None, openapi_url=None)
+app = FastAPI(
+    lifespan=lifespan_handler, redoc_url=None, docs_url=None, openapi_url=None
+)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -54,12 +56,15 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
 @app.get("/")
 def root():
     return FileResponse("../index.html")
+
+
 @app.post("/analyze", include_in_schema=False)
 async def analyze(
-    file: UploadFile,
+    file: UploadFile = File(...),
     separator: Optional[str] = Form(None),
     sheet_name: Optional[str] = Form(None),
 ):
@@ -121,6 +126,8 @@ async def test_models(
     sheet_name: Optional[str] = Form(None),
     separator: Optional[str] = Form(None),
 ):
+    output = BytesIO()
+
     contents = await dataset_file.read()
 
     dict_types = json.loads(dict_types)
@@ -131,15 +138,22 @@ async def test_models(
         BytesIO(contents), file_extension, sheet_name=sheet_name, sep=separator
     )
 
-    categoricals_raw = json.loads(categoricals) if categoricals else None
-    categoricals = categoricals_raw
-    if categoricals_raw:
-        for cat in categoricals_raw:
-            if df[cat].nunique() > 200:
-                df.drop(columns=cat, inplace=True)
-                del dict_types[cat]
-            else:
-                categoricals[cat] = categoricals_raw[cat]
+    df.columns = df.columns.str.strip()
+
+    categoricals_raw = json.loads(categoricals) if categoricals else []
+    categoricals = {}
+
+    for cat in categoricals_raw:
+
+        if cat not in df.columns:
+            continue
+
+        if df[cat].nunique() > min(200, len(df) * 0.7):
+            df.drop(columns=cat, inplace=True)
+            dict_types.pop(cat, None)
+        else:
+            categoricals[cat] = df[cat]
+            if cat in dict_types:
                 dict_types[cat]["values"] = df[cat].unique().tolist()
 
     if id_columns:
@@ -209,15 +223,6 @@ async def test_models(
         # Put the final dataset, the high correlation, the all correlation dataset and the model itself in a zip
         output = BytesIO()
 
-        with zipfile.ZipFile(output, "w") as z:
-            if changed_columns is not None:
-                z.writestr("changed_columns.csv", changed_columns.to_csv(index=False))
-            z.writestr("stats_df.csv", stats_df.to_csv(index=False)),
-            z.writestr("high_correlations.csv", csv_high_correlations)
-            z.writestr("all_correlations.csv", csv_all_correlations)
-            z.writestr(f"ml_model.pkl", ml_model)
-            z.writestr(f"preprocessor.pkl", preprocessor_pkl)
-
     if not target:
         if not n_groups:
             # No target AND n_groups? hierarchical cluster.
@@ -248,24 +253,39 @@ async def test_models(
         best_model.fit_predict(X_transformed)
         df["cluster"] = best_model.labels_
         # Put the final dataset, the high correlation, the all correlation dataset and the model itself in a zip
-        output = BytesIO()
-        with zipfile.ZipFile(output, "w") as z:
-            z.writestr("dataset.csv", df.to_csv(index=False))
-            z.writestr("stats_df.csv", stats_df.to_csv(index=False)),
+
+    output = BytesIO()
+
+    with zipfile.ZipFile(output, "w") as z:
+
+        if target:
+            if changed_columns is not None:
+                z.writestr("changed_columns.csv", changed_columns.to_csv(index=False))
+
+            z.writestr("stats_df.csv", stats_df.to_csv(index=False))
             z.writestr("high_correlations.csv", csv_high_correlations)
             z.writestr("all_correlations.csv", csv_all_correlations)
+            z.writestr("ml_model.pkl", ml_model)
+            z.writestr("preprocessor.pkl", preprocessor_pkl)
+
+        else:
+            z.writestr("dataset.csv", df.to_csv(index=False))
+            z.writestr("stats_df.csv", stats_df.to_csv(index=False))
+            z.writestr("high_correlations.csv", csv_high_correlations)
+            z.writestr("all_correlations.csv", csv_all_correlations)
+
             if knn is not None:
-                z.writestr("knn.pkl", pickle.dumps(knn)),
-            z.writestr(f"ml_model.pkl", ml_model)
-            z.writestr(f"preprocessor.pkl", preprocessor)
+                z.writestr("knn.pkl", pickle.dumps(knn))
 
+            z.writestr("ml_model.pkl", ml_model)
+            z.writestr("preprocessor.pkl", preprocessor)
 
-    basic_stats = df.describe()
-    with zipfile.ZipFile(output, "w") as z:
-        z.writestr("basic_stats.csv", basic_stats.to_csv(index=False))
+        # basic stats sempre no final
+        basic_stats = df.describe()
+        z.writestr("basic_stats.csv", basic_stats.to_csv())
 
     output.seek(0)
-    
+
     return StreamingResponse(
         output,
         media_type="application/zip",
