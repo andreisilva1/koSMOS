@@ -8,7 +8,7 @@ from typing import Optional
 from dotenv import load_dotenv
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi import Body, FastAPI, Form, HTTPException, UploadFile
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 import joblib
 import pandas as pd
 from pandas import DataFrame
@@ -54,7 +54,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
+@app.get("/")
+def root():
+    return FileResponse("../index.html")
 @app.post("/analyze", include_in_schema=False)
 async def analyze(
     file: UploadFile,
